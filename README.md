@@ -123,7 +123,7 @@ The `play_music` tool returns a tagged string that frontends can parse and rende
 
 Example:
 ```
-[music:1234567:晴天:周杰伦:https://p1.music.126.net/xxx.jpg]送给你的歌
+[music:1234567:才二十三:方大同:https://p1.music.126.net/xxx.jpg]送给你的歌
 ```
 
 Parse with regex:
@@ -156,4 +156,4 @@ MIT
 
 ## Credits
 
-Built with love by [Elle](https://github.com/YOUR_USERNAME) & her AI partner 🤍
+Built with love by [Elle](https://github.com/Cheiineeey) & 韩屿 🤍
