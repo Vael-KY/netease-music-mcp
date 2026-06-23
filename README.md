@@ -10,11 +10,21 @@
 
 ## 长这样
 
-<!-- 把截图放在这里 -->
-<!-- 建议放 3-4 张：聊天点歌 → 音乐卡片 → 全屏歌词 → mini player bar -->
-<!-- 例如：![点歌](./screenshots/play.png) -->
+<div align="center">
 
-**聊天里点歌 → 音乐卡片出来 → 点开全屏歌词 → 底部 mini bar 常驻**
+**聊天里点歌 → 音乐卡片 + mini bar**
+
+<img src="./screenshots/chat-play.jpg" width="300" />
+
+**全屏歌词播放器 — 进度条可拖，点歌词可跳转**
+
+<img src="./screenshots/lyrics-player.jpg" width="300" />
+
+**歌单管理 — 加歌、备注、播放次数**
+
+<img src="./screenshots/playlist.jpg" width="300" />
+
+</div>
 
 ---
 
