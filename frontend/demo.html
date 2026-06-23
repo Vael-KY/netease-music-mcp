@@ -630,10 +630,70 @@ window.lpPrev = function() {
 function _lpAutoNext() {
   setTimeout(_miniSync, 200);
   var q = _lpGetQueue && _lpGetQueue();
-  if (q && q.songs && q.songs.length > 1) {
-    var idx = q.getIdx(_lp.id);
-    if (idx >= 0 && idx < q.songs.length - 1) setTimeout(function() { lpNext && lpNext(); }, 400);
+  if (!q || !q.songs || q.songs.length <= 1) return;
+  var curId = String(_lp.id || '');
+  var idx = -1;
+  for (var i = 0; i < q.songs.length; i++) {
+    if (String(q.songs[i].id || q.songs[i].song_id || '') === curId) { idx = i; break; }
   }
+  if (idx < 0 || idx >= q.songs.length - 1) return;
+  var next = q.songs[idx + 1];
+  if (_lpQueue) _lpQueue.index = idx + 1;
+
+  var nextId = String(next.id||next.song_id||'');
+  var nextName = next.name||next.song_name||'';
+  var nextArt = next.artist||'';
+  var nextPic = next.pic||next.cover_url||'';
+  var lpWasOpen = document.getElementById('lyricPlayer').style.display === 'flex';
+
+  // iOS autoplay fix: create audio synchronously before any await
+  if (window._lpAudio) { window._lpAudio.pause(); window._lpAudio = null; }
+  clearInterval(_lp.timer); _lp.timer = null;
+  _lp.id = nextId; _lp.name = nextName; _lp.artist = nextArt; _lp.pic = nextPic;
+  _lp.elapsed = 0; _lp.playing = false; _lp.activeIdx = -1; _lp.lines = []; _lp.tlines = [];
+
+  var audio = new Audio();
+  audio.preload = 'auto';
+  window._lpAudio = audio;
+  audio.addEventListener('ended', function() { if (window._lpAudio === audio) _lpAutoNext(); });
+
+  if (lpWasOpen) {
+    document.getElementById('lpTitle').textContent = nextName;
+    document.getElementById('lpArtist').textContent = nextArt;
+    document.getElementById('lpTimer').textContent = '0:00';
+    document.getElementById('lpDuration').textContent = '—';
+    document.getElementById('lpProgressFill').style.width = '0%';
+    var covEl = document.getElementById('lpCover');
+    if (nextPic) { covEl.src = nextPic; covEl.style.display='block'; } else { covEl.style.display='none'; }
+    document.getElementById('lpBg').style.backgroundImage = nextPic ? 'url('+nextPic+')' : '';
+    document.getElementById('lpLyricsInner').innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.25);padding:40px;">加载中…</div>';
+  }
+
+  (async function() {
+    try {
+      var ur = await fetch(API_BASE+'/api/music/url?id='+encodeURIComponent(nextId), {headers:apiHeaders()}).then(function(r){return r.json();});
+      if (window._lpAudio !== audio) return;
+      if (!ur.url) return;
+      audio.src = API_BASE+'/api/music/proxy?url='+encodeURIComponent(ur.url);
+      audio.oncanplay = function() {
+        if (window._lpAudio !== audio) { audio.pause(); return; }
+        fetch(API_BASE+'/api/music/played?id='+encodeURIComponent(nextId), {headers:apiHeaders()}).catch(function(){});
+        audio.play().catch(function(){}); lpStart(); _miniSync();
+      };
+      audio.onloadedmetadata = function() {
+        var d = audio.duration;
+        if (!isNaN(d) && lpWasOpen) document.getElementById('lpDuration').textContent = Math.floor(d/60)+':'+(Math.floor(d%60)<10?'0':'')+Math.floor(d%60);
+      };
+      audio.load();
+    } catch(e) {}
+    if (!lpWasOpen) return;
+    try {
+      var lr = await fetch(API_BASE+'/api/music/lyric?id='+nextId, {headers:apiHeaders()}).then(function(r){return r.json();});
+      if (window._lpAudio !== audio) return;
+      _lp.lines = parseLrc(lr.lyric||''); _lp.tlines = parseLrc(lr.tlyric||'');
+      renderLyrics();
+    } catch(e) {}
+  })();
 }
 
 // ── Mini Player ──
@@ -751,7 +811,11 @@ window.plBrowserShowSongs = async function(pl) {
       if (s.cover_url) { var img = document.createElement('img'); img.src = s.cover_url; img.style.cssText='width:100%;height:100%;object-fit:cover;'; thumb.appendChild(img); } else { thumb.textContent = '♪'; }
       var info = document.createElement('div'); info.style.cssText = 'flex:1;min-width:0;';
       var nm = document.createElement('div'); nm.style.cssText = 'font-size:0.82rem;font-weight:' + (isCur?'700':'500') + ';color:' + (isCur?'white':'rgba(255,255,255,0.8)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'; nm.textContent = s.song_name||'';
-      var ar = document.createElement('div'); ar.style.cssText = 'font-size:0.68rem;color:rgba(255,255,255,0.35);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'; ar.textContent = s.artist||'';
+      var ar = document.createElement('div'); ar.style.cssText = 'font-size:0.68rem;color:rgba(255,255,255,0.35);margin-top:2px;display:flex;gap:6px;align-items:center;overflow:hidden;';
+      var arTxt = document.createElement('span'); arTxt.style.cssText='white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;'; arTxt.textContent = s.artist||'';
+      ar.appendChild(arTxt);
+      var _pc = parseInt(s.play_count)||0;
+      if (_pc > 0) { var pcEl = document.createElement('span'); pcEl.style.cssText='color:rgba(255,255,255,0.25);font-size:0.6rem;flex-shrink:0;background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:6px;'; pcEl.textContent=_pc+'次'; ar.appendChild(pcEl); }
       info.appendChild(nm); info.appendChild(ar);
       row.appendChild(idx); row.appendChild(thumb); row.appendChild(info);
       row.onclick = (function(song){ return function(){ togglePlaylistBrowser(); openLyricPlayer(song.song_id, song.song_name, song.artist, song.cover_url||'', ''); }; })(s);

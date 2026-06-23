@@ -16,5 +16,6 @@ CREATE TABLE IF NOT EXISTS playlist_songs (
   artist TEXT,
   cover_url TEXT,
   note TEXT,
-  added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  play_count INTEGER DEFAULT 0
 );

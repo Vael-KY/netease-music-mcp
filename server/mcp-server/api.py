@@ -169,12 +169,25 @@ class APIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 self._json({"error": str(e)}, 500)
 
+        elif path == '/api/music/played':
+            song_id = (params.get('id') or [''])[0]
+            if song_id:
+                try:
+                    db = sqlite3.connect(DB_PATH)
+                    db.execute("UPDATE playlist_songs SET play_count = COALESCE(play_count,0)+1 WHERE song_id=?", (str(song_id),))
+                    db.commit(); db.close()
+                    self._json({'ok': True}); return
+                except Exception as e:
+                    self._json({'error': str(e)}, 500); return
+            else:
+                self._json({'error': 'missing id'}, 400); return
+
         elif path.startswith('/api/playlists/') and path.endswith('/songs'):
             pl_id = path.split('/')[3]
             try:
                 db = sqlite3.connect(DB_PATH)
                 db.row_factory = sqlite3.Row
-                rows = db.execute("SELECT * FROM playlist_songs WHERE playlist_id=? ORDER BY added_at ASC",
+                rows = db.execute("SELECT *, COALESCE(play_count,0) as play_count FROM playlist_songs WHERE playlist_id=? ORDER BY added_at ASC",
                                   (pl_id,)).fetchall()
                 db.close()
                 self._json([dict(r) for r in rows])
