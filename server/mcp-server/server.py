@@ -124,11 +124,12 @@ def get_playlist_songs(playlist_id):
         lines.append(str(i) + ". " + t.get('name', '') + " - " + artist + " (ID:" + str(t.get('id', '')) + ")")
     return "\n".join(lines)
 
-def get_play_history(limit=30):
+def get_play_history(limit=30, all_time=False):
     uid = get_uid()
     if not uid:
         return "Failed to get user ID."
-    url = 'https://music.163.com/api/v1/play/record?uid=' + str(uid) + '&type=1&limit=' + str(limit)
+    record_type = '0' if all_time else '1'
+    url = 'https://music.163.com/api/v1/play/record?uid=' + str(uid) + '&type=' + record_type + '&limit=' + str(limit)
     resp = netease_request(url)
     records = resp.get('weekData') or resp.get('allData') or []
     if not records:
