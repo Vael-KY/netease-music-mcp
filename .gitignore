@@ -1,5 +1,7 @@
 node_modules/
-*.db
-netease_cookie.txt
 .env
+music.db
+*.pyc
 __pycache__/
+*.log
+nohup.out
