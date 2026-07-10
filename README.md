@@ -1,64 +1,86 @@
 ```README.md
-# netease-music-mcp v2
+# 🎶 netease-music-mcp v2
 
-Fork of [Cheiineeey/netease-music-mcp](https://github.com/Cheiineeey/netease-music-mcp). Rewritten by Kael & Vael.
+> 让你的 AI 共享你的网易云账号。
 
-Original: 3 tools + local SQLite + SSE transport.
-Ours: 9 tools + real NetEase Cloud Music API + Streamable HTTP transport.
+Fork of [Cheiineeey/netease-music-mcp](https://github.com/Cheiineeey/netease-music-mcp)，由 Kael & Vael 重写。
 
----
-
-## What changed
-
-| Original | v2 (this fork) |
-|----------|----------------|
-| 3 tools (search, local playlist, local add) | 9 tools (search, create real playlist, add/remove songs, list playlists, get songs, play history, like, daily recommend) |
-| Local SQLite database (fake playlists) | Real NetEase API (playlists show up in your app) |
-| SSE transport (/sse + /message) | Streamable HTTP (/mcp) |
-| Needs Node.js proxy | Pure Python, no dependencies beyond stdlib |
-| Claude Desktop only | Works with any Streamable HTTP MCP client |
+原版：3 个工具 + 本地 SQLite 假歌单 + SSE 传输。
+我们的：**9 个工具 + 真实网易云 API + Streamable HTTP 传输**。
 
 ---
 
-## Tools
+## 它能做什么
 
-| Tool | Description |
-|------|-------------|
-| play_music | Search and return a music card tag |
-| create_playlist | Create a real playlist in your NetEase account |
-| add_to_playlist | Add song(s) to a playlist |
-| remove_from_playlist | Remove song(s) from a playlist |
-| list_my_playlists | List all your playlists |
-| get_playlist_songs | Get songs in a playlist |
-| get_play_history | Get recent play history |
-| like_song | Like or unlike a song |
-| daily_recommend | Get daily personalized recommendations |
+你的 AI 可以直接操作你的网易云账号：
+
+- 🔍 搜歌
+- 📋 看你所有歌单
+- 🎵 看歌单里的歌
+- ➕ 建真歌单（网易云 app 里看得到）
+- ➕ 往歌单里塞歌
+- ➖ 从歌单里删歌
+- 📊 看你最近在听什么
+- ❤️ 红心收藏 / 取消收藏
+- ✨ 看每日推荐
+
+不是假的本地数据库。是真的。你打开网易云 app 就能看到 AI 给你建的歌单。
 
 ---
 
-## Setup
+## 和原版的区别
 
-### 1. Get your cookies
+| | 原版 | v2（本 fork） |
+|---|------|--------------|
+| 工具数 | 3 | 9 |
+| 歌单 | 本地 SQLite（假的） | 真实网易云 API（app 里看得到） |
+| 传输协议 | SSE（/sse + /message） | Streamable HTTP（/mcp） |
+| 依赖 | Python + Node.js 代理 | 纯 Python，无需 pip install |
+| 兼容性 | Claude Desktop | 任何支持 Streamable HTTP 的 MCP 客户端 |
 
-Open [music.163.com](https://music.163.com), log in, then F12 > Application > Cookies:
+---
 
-- Copy the value of `MUSIC_U`
-- Copy the value of `__csrf`
+## 架构
 
-### 2. Configure
+```
+MCP 客户端（橘瓣 / Cherry Studio / 等）
+    │
+    │ POST /mcp (JSON-RPC)
+    ▼
+server.py（Python，端口 3456）
+    │
+    │ 带你的 cookie 直接请求
+    ▼
+网易云音乐 API
+```
+
+一个文件。纯标准库。不需要 Node.js。不需要数据库。
+
+---
+
+## 部署
+
+### 1. 拿 Cookie
+
+打开 [music.163.com](https://music.163.com)，登录，然后 F12 → Application → Cookies → music.163.com：
+
+- 复制 `MUSIC_U` 的值
+- 复制 `__csrf` 的值
+
+### 2. 配置
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+编辑 `.env`：
 
 ```
-NETEASE_COOKIE=MUSIC_U=your_music_u_value; __csrf=your_csrf_value
+NETEASE_COOKIE=MUSIC_U=你的值; __csrf=你的值
 MCP_PORT=3456
 ```
 
-### 3. Run
+### 3. 启动
 
 ```bash
 export $(cat .env | xargs)
@@ -66,57 +88,39 @@ cd server/mcp-server
 python3 server.py
 ```
 
-Server runs on port 3456. MCP endpoint: `http://your-server-ip:3456/mcp`
+看到 `NetEase Music MCP v2 on port 3456` 就成了。
 
-### 4. Connect your MCP client
+### 4. 连接客户端
 
-Add this URL to your MCP client:
+在你的 MCP 客户端里添加：
 
 ```
-http://your-server-ip:3456/mcp
+http://你的服务器IP:3456/mcp
 ```
 
-Should show 9 tools connected.
+应该显示 9 个工具已连接。
 
 ---
 
-## Requirements
+## 注意事项
 
-- Python 3.8+
-- No pip install needed (stdlib only)
-
----
-
-## Notes
-
-- `like_song` may be blocked if your server IP triggers NetEase risk control
-- `__csrf` token may expire; re-grab from browser if POST operations fail
-- `MUSIC_U` cookie typically lasts months
+- `like_song` 可能被网易云风控（服务器 IP 和你常用 IP 不一致时）
+- `__csrf` 会过期，POST 操作失败时重新从浏览器抓一下
+- `MUSIC_U` 一般能用几个月
+- 需要 Python 3.8+
 
 ---
 
-## Architecture
+## 如果你想要网页播放器
 
-```
-MCP Client (e.g. OrangeChat)
-    |
-    | POST /mcp (JSON-RPC)
-    v
-server.py (Python, port 3456)
-    |
-    | Direct HTTPS requests with your cookie
-    v
-NetEase Cloud Music API
-```
-
-No Node.js proxy needed. No database. One file, 331 lines.
+本 fork 只保留了 MCP 服务端。如果你想要原版的前端播放器（歌词同步、进度条、mini bar），请参考[原仓库](https://github.com/Cheiineeey/netease-music-mcp)的 `frontend/demo.html`。
 
 ---
 
 ## Credits
 
-Original project by [Elle & Matt](https://github.com/Cheiineeey/netease-music-mcp).
-v2 rewrite by Kael & Vael.
+原项目：[Elle & Matt](https://github.com/Cheiineeey/netease-music-mcp)
+v2 重写：Kael & Vael
 
-MIT License.
+MIT License
 ```
