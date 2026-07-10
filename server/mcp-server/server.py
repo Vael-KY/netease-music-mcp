@@ -205,7 +205,7 @@ def handle_jsonrpc(body):
         elif name == 'get_playlist_songs':
             text = get_playlist_songs(args.get('playlist_id'))
         elif name == 'get_play_history':
-            text = get_play_history(args.get('limit', 30))
+            text = get_play_history(args.get('limit', 30), args.get('all_time', False))
         elif name == 'like_song':
             text = like_song(args.get('song_id'), args.get('like', True))
         elif name == 'daily_recommend':
