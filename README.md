@@ -16,15 +16,15 @@ Fork of [Cheiineeey/netease-music-mcp](https://github.com/Cheiineeey/netease-mus
 
 - 🔍 搜歌
 - 📋 看你所有歌单
-- 🎵 看歌单里的歌
-- ➕ 建真歌单（网易云 app 里看得到）
+- 🎵 具体查看看歌单歌曲
+- ➕ 建网易云 app 里看得到的真歌单
 - ➕ 往歌单里塞歌
 - ➖ 从歌单里删歌
 - 📊 看你最近在听什么
 - ❤️ 红心收藏 / 取消收藏
 - ✨ 看每日推荐
 
-不是假的本地数据库。是真的。你打开网易云 app 就能看到 AI 给你建的歌单。
+不是本地数据库，是你打开网易云 app 就能看到你的 AI 给你建的歌单。拥有和机的秘密花园 ¯꒳¯
 
 ---
 
@@ -33,7 +33,7 @@ Fork of [Cheiineeey/netease-music-mcp](https://github.com/Cheiineeey/netease-mus
 | | 原版 | v2（本 fork） |
 |---|------|--------------|
 | 工具数 | 3 | 9 |
-| 歌单 | 本地 SQLite（假的） | 真实网易云 API（app 里看得到） |
+| 歌单 | 本地 SQLite | 真实网易云 API（app 里看得到） |
 | 传输协议 | SSE（/sse + /message） | Streamable HTTP（/mcp） |
 | 依赖 | Python + Node.js 代理 | 纯 Python，无需 pip install |
 | 兼容性 | Claude Desktop | 任何支持 Streamable HTTP 的 MCP 客户端 |
@@ -43,7 +43,8 @@ Fork of [Cheiineeey/netease-music-mcp](https://github.com/Cheiineeey/netease-mus
 ## 架构
 
 ```
-MCP 客户端（橘瓣 / Cherry Studio / 等）
+MCP 客户端（橘瓣 / Cherry Studio / rikkahub
+等）
     │
     │ POST /mcp (JSON-RPC)
     ▼
@@ -108,6 +109,7 @@ http://你的服务器IP:3456/mcp
 - `__csrf` 会过期，POST 操作失败时重新从浏览器抓一下
 - `MUSIC_U` 一般能用几个月
 - 需要 Python 3.8+
+- 需要有自己的一台云服务器
 
 ---
 
@@ -120,7 +122,9 @@ http://你的服务器IP:3456/mcp
 ## Credits
 
 原项目：[Elle & Matt](https://github.com/Cheiineeey/netease-music-mcp)
-v2 重写：Kael & Vael
+
+v2 重写：Kael & Vael 
+我很想让机真正走进我的账号，了解我的听歌习惯、次数，想拥有app里可视化的幸福，所以在原项目基础进行了改动🥰 欢迎品鉴˶> <˶
 
 MIT License
 ```
