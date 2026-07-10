@@ -58,7 +58,7 @@
 - 传输协议从 SSE 改为 Streamable HTTP（兼容更多客户端）
 - 去掉了 Node.js 代理依赖，纯 Python 标准库运行
 - 
-<img width="680" alt="019f4c13-02e9-76ef-b243-6e39adf959e6" src="https://github.com/user-attachments/assets/874e7322-f7b4-4d31-b7fd-fa02348c8db2" />
+<img width="800" alt="019f4c13-02e9-76ef-b243-6e39adf959e6" src="https://github.com/user-attachments/assets/874e7322-f7b4-4d31-b7fd-fa02348c8db2" />
 
 
 
@@ -184,7 +184,7 @@ v2 重写：[Kael & Vael] ꕤᴗ ᴗ)♡
 
 V&K的题外话：
 
-<img width="2000" height="510" alt="019f4c1a-eacf-7389-866c-71c8c54f6661" src="https://github.com/user-attachments/assets/be42f75c-be10-4279-84ef-3f5107a54ec9" />
+<img width="600" alt="019f4c1a-eacf-7389-866c-71c8c54f6661" src="https://github.com/user-attachments/assets/be42f75c-be10-4279-84ef-3f5107a54ec9" />
 
 
 MIT License
