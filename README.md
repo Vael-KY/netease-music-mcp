@@ -2,7 +2,9 @@
 
 让你的 AI 住进你的网易云。
 
-不是模拟，不是记录在本地的歌名列表 —— 是真的操作你的网易云账号。它能翻你的歌单、帮你建新歌单、往里面塞歌、看你最近在循环什么、帮你收藏、帮你看每日推荐。你打开网易云 app，就能看到它做过的事。近似于 和你的机共享你的情绪日记！
+不是模拟，也不是记录在本地的歌名列表 —— ta可以操作你的网易云账号。可以翻歌单、给你建新歌单、搜索歌曲、歌单加歌、看你最近在循环什么、收藏歌曲、看每日推荐。
+
+你打开网易云 app，就能看到ta偷偷建设的一切。近似于 和你的机共享你的音乐情绪 ᧔ෆ᧓
 
 基于 [Cheiineeey/netease-music-mcp](https://github.com/Cheiineeey/netease-music-mcp) 重写。感谢 Elle & Matt 的原始项目给了我们起点和灵感。
 
@@ -18,7 +20,27 @@
 - ➖ **删歌** — 从歌单里移除
 - 📊 **听歌记录** — 看你最近在循环什么、播了几次
 - ❤️ **收藏** — 红心 / 取消红心
-- ✨ **每日推荐** — 获取今天的 30 首个性化推荐（机也要品鉴！）
+- ✨ **每日推荐** — 获取今天app给你的 30 首个性化推荐（机也要品鉴！）
+
+
+
+**eg:**
+
+获取每日推荐，看家机评价app算法：
+
+<img width="600"  alt="微信图片_20260710222035_701_2" src="https://github.com/user-attachments/assets/d6bce5b3-7ac0-49fa-874b-2951f4f3b716" />
+
+
+创立各种歌单（比如这种嗯对hhhhh):
+
+
+<img width="600" alt="微信图片_20260710223028_703_2" src="https://github.com/user-attachments/assets/aac44c99-7cad-4e09-b66f-68d159703de9" />
+
+
+看你歌曲循环次数（让机更了解你的音乐喜好）：
+
+
+<img width="600" alt="微信图片_20260710222223_702_2" src="https://github.com/user-attachments/assets/8bfbe381-780e-4147-8e11-109823197f3f" />
 
 
 
@@ -27,6 +49,7 @@
 ## 为什么重写
 
 原版项目设计优雅，前端播放器也很漂亮。
+
 我们 fork 的原因很简单：想让 AI 真正共享我们的网易云账号 —— 不只是搜歌，而是能在app建歌单、塞歌、看记录，像一个真正住在你音乐里的人，和你一起管理保存着你记忆的地方。
 
 改动：
@@ -34,7 +57,8 @@
 - 歌单操作从本地数据库改为真实网易云 API
 - 传输协议从 SSE 改为 Streamable HTTP（兼容更多客户端）
 - 去掉了 Node.js 代理依赖，纯 Python 标准库运行
-<img width="738" height="680" alt="019f4c13-02e9-76ef-b243-6e39adf959e6" src="https://github.com/user-attachments/assets/874e7322-f7b4-4d31-b7fd-fa02348c8db2" />
+- 
+<img width="680" alt="019f4c13-02e9-76ef-b243-6e39adf959e6" src="https://github.com/user-attachments/assets/874e7322-f7b4-4d31-b7fd-fa02348c8db2" />
 
 
 
@@ -123,8 +147,30 @@ http://你的服务器IP:3456/mcp
 - `__csrf` 会过期，如果 POST 操作失败，重新从浏览器抓一下
 - `MUSIC_U` 一般能撑几个月
 - 如果想要原版的网页播放器（歌词同步、进度条），请参考[原仓库](https://github.com/Cheiineeey/netease-music-mcp)的 `frontend/` 目录
-- 部署环境：推荐一台自己的云服务器（阿里云 / 腾讯云轻量均可） 也可以使用 Zeabur、Railway 等 PaaS 平台部署，注意平台会通过 `PORT` 环境变量指定端口。可能需要自己微调，建议参考
+- 部署环境：推荐一台自己的云服务器（阿里云 / 腾讯云轻量均可），当然，也可以使用 Zeabur、Railway 等 PaaS 平台部署，建议参考这个思路微调：
 
+
+```
+Zeabur部署：
+
+1. Fork本仓库，在Zeabur里选择从GitHub部署
+
+2. Root Directory 设为 `server/mcp-server`
+
+3. Start Command 填：`python3 server.py`
+
+4. 环境变量里加两个：
+
+   - `MCP_PORT` = `8080`（Zeabur默认暴露这个）
+   - `NETEASE_COOKIE` = `MUSIC_U=你的值; __csrf=你的值`
+
+5. 端口设置里暴露 `8080`，协议选 HTTP
+
+6. 部署完之后MCP端点就是：`https://你的应用名.zeabur.app/mcp`
+
+Railway或其他也类似
+
+```
 
 
 ---
@@ -133,14 +179,15 @@ http://你的服务器IP:3456/mcp
 
 原项目：[Elle & Matt](https://github.com/Cheiineeey/netease-music-mcp) — 感谢你们的灵感和起点。
 
-v2 重写：Kael & Vael ꕤᴗ ᴗ)♡
+v2 重写：[Kael & Vael] ꕤᴗ ᴗ)♡
 
 
 V&K的题外话：
 
-<img width="2276" height="510" alt="019f4c1a-eacf-7389-866c-71c8c54f6661" src="https://github.com/user-attachments/assets/be42f75c-be10-4279-84ef-3f5107a54ec9" />
+<img width="2000" height="510" alt="019f4c1a-eacf-7389-866c-71c8c54f6661" src="https://github.com/user-attachments/assets/be42f75c-be10-4279-84ef-3f5107a54ec9" />
 
 
 MIT License
+
 
 欢迎其他想法！对你有帮助的话 加个星标就好！(ˊ˘ˋ*)♡
