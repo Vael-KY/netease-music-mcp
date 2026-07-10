@@ -147,6 +147,7 @@ http://你的服务器IP:3456/mcp
 - `__csrf` 会过期，如果 POST 操作失败，重新从浏览器抓一下
 - `MUSIC_U` 一般能撑几个月
 - 如果想要原版的网页播放器（歌词同步、进度条），请参考[原仓库](https://github.com/Cheiineeey/netease-music-mcp)的 `frontend/` 目录
+- 兼容：橘瓣 / Cherry Studio / 所有支持 Streamable HTTP 的 MCP 客户端
 - 部署环境：推荐一台自己的云服务器（阿里云 / 腾讯云轻量均可），当然，也可以使用 Zeabur、Railway 等 PaaS 平台部署，建议参考这个思路微调：
 
 
