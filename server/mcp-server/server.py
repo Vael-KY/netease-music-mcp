@@ -48,7 +48,8 @@ def play_music(query, note=None):
         pic_url = ''
     name = s.get('name', '').replace(':', '\uff1a')
     artist = ', '.join([a.get('name', '') for a in s.get('artists', [])]).replace(':', '\uff1a')
-    return "[music:" + str(song_id) + ":" + name + ":" + artist + ":" + pic_url + "]" + (note or '')
+    link = "https://music.163.com/song?id=" + str(song_id)
+    return "[music:" + str(song_id) + ":" + name + ":" + artist + ":" + pic_url + "]" + (note or '') + "\n" + link
 
 def create_playlist(name, description='', privacy=0):
     csrf = get_csrf()
