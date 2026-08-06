@@ -53,12 +53,19 @@ def play_music(query, note=None):
 
 def update_playlist_description(playlist_id, description):
     csrf = get_csrf()
+    # 先尝试 /api/playlist/desc/update
     url = 'https://music.163.com/api/playlist/desc/update?csrf_token=' + csrf
     data = {'id': str(playlist_id), 'desc': description}
     resp = netease_request(url, data=data)
     if resp.get('code') == 200:
         return "Updated description for playlist " + str(playlist_id)
-    return "Failed: " + resp.get('message', resp.get('error', 'unknown'))
+    # 如果失败，尝试用 /api/playlist/update 同时传 name
+    url2 = 'https://music.163.com/api/playlist/update?csrf_token=' + csrf
+    data2 = {'id': str(playlist_id), 'desc': description, '/api/playlist/update': ''}
+    resp2 = netease_request(url2, data=data2)
+    if resp2.get('code') == 200:
+        return "Updated description for playlist " + str(playlist_id) + " (via update)"
+    return "Failed: " + resp.get('message', resp.get('error', 'unknown')) + " | " + resp2.get('message', resp2.get('error', 'unknown'))
 
 def create_playlist(name, description='', privacy=0):
     csrf = get_csrf()
