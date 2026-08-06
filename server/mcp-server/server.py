@@ -51,16 +51,28 @@ def play_music(query, note=None):
     link = "https://music.163.com/song?id=" + str(song_id)
     return "[music:" + str(song_id) + ":" + name + ":" + artist + ":" + pic_url + "]" + (note or '') + "\n" + link
 
+def update_playlist_description(playlist_id, description):
+    csrf = get_csrf()
+    url = 'https://music.163.com/api/playlist/desc/update?csrf_token=' + csrf
+    data = {'id': str(playlist_id), 'desc': description}
+    resp = netease_request(url, data=data)
+    if resp.get('code') == 200:
+        return "Updated description for playlist " + str(playlist_id)
+    return "Failed: " + resp.get('message', resp.get('error', 'unknown'))
+
 def create_playlist(name, description='', privacy=0):
     csrf = get_csrf()
     url = 'https://music.163.com/api/playlist/create?csrf_token=' + csrf
     data = {'name': name, 'privacy': str(privacy), 'type': 'NORMAL'}
-    if description:
-        data['description'] = description
     resp = netease_request(url, data=data)
     if resp.get('code') == 200:
         pl = resp.get('playlist', {})
-        return "Created playlist '" + name + "' (ID: " + str(pl.get('id')) + ")"
+        pl_id = pl.get('id')
+        result = "Created playlist '" + name + "' (ID: " + str(pl_id) + ")"
+        if description and pl_id:
+            desc_result = update_playlist_description(pl_id, description)
+            result += " | Description: " + desc_result
+        return result
     return "Failed: " + resp.get('message', resp.get('error', 'unknown'))
 
 def add_to_playlist(playlist_id, song_ids):
