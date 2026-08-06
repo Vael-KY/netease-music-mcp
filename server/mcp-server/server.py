@@ -210,6 +210,8 @@ def handle_jsonrpc(body):
             text = play_music(args.get('query', ''), args.get('note'))
         elif name == 'create_playlist':
             text = create_playlist(args.get('name', ''), args.get('description', ''), args.get('privacy', 0))
+        elif name == 'update_playlist_description':
+            text = update_playlist_description(args.get('playlist_id'), args.get('description', ''))
         elif name == 'add_to_playlist':
             text = add_to_playlist(args.get('playlist_id'), args.get('song_ids', ''))
         elif name == 'remove_from_playlist':
