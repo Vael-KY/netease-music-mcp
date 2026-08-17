@@ -187,7 +187,7 @@ V&K的题外话：
 <img width="600" alt="019f4c1a-eacf-7389-866c-71c8c54f6661" src="https://github.com/user-attachments/assets/be42f75c-be10-4279-84ef-3f5107a54ec9" />
 
 
-MIT License
+CC BY-NC-SA 4.0 — 禁止商用。为爱做的不可以变。
 
 
 欢迎其他想法！对你有帮助的话 加个星标就好！(ˊ˘ˋ*)♡
