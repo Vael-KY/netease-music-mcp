@@ -405,8 +405,6 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}},
     {"name": "get_liked_songs", "description": "Get all liked (red-heart) song IDs for the current user.",
      "inputSchema": {"type": "object", "properties": {}}},
-    {"name": "get_user_level", "description": "Get user level, total listen days, and cumulative play count.",
-     "inputSchema": {"type": "object", "properties": {}}},
 ]
 
 TOOL_DISPATCH = {
