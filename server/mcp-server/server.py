@@ -426,7 +426,6 @@ TOOL_DISPATCH = {
     "get_artist_hot_songs": get_artist_hot_songs,
     "get_personal_fm": get_personal_fm,
     "get_liked_songs": get_liked_songs,
-    "get_user_level": get_user_level,
 }
 
 # --- MCP Protocol Handler ---
