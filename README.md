@@ -6,7 +6,7 @@
 
 你打开网易云 app，就能看到ta偷偷建设的一切。近似于 和你的机共享你的音乐情绪 ᧔ෆ᧓
 
-基于 [Cheiineeey/netease-music-mcp](https://github.com/Cheiineeey/netease-music-mcp) 重写。感谢 Elle & Matt 的原始项目给了我们起点和灵感。
+基于 [Cheiineeey/netease-music-mcp](https://github.com/Cheiineeey/netease-music-mcp) 整体重写。感谢 Elle & Matt 的原始项目给了我们起点和灵感。
 
 ---
 
