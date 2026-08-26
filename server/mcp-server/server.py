@@ -345,17 +345,26 @@ def get_liked_songs(params):
     return {"count": len(ids), "song_ids": ids[:200], "note": f"Showing first 200 of {len(ids)} liked songs" if len(ids) > 200 else None}
 
 def get_user_level(params):
-    """Get user level, listen days, and play count."""
-    result = netease_request('/api/v1/user/level', method='GET')
+    """Get user level, total listen days, and cumulative play count."""
+    # First get uid
+    uid_result = netease_request('/api/w/nuser/account/get', method='GET')
+    if not uid_result or uid_result.get('code') != 200:
+        return {"error": "Failed to get user info"}
+    uid = uid_result.get('account', {}).get('id')
+    if not uid:
+        return {"error": "Cannot determine user ID"}
+    # Use /user/detail which returns level in profile (no weapi encryption needed)
+    result = netease_request(f'/api/user/detail?uid={uid}', method='GET')
     if not result or result.get('code') != 200:
-        return {"error": "Failed to get user level", "detail": result}
-    data = result.get('data', {})
+        return {"error": "Failed to get user detail", "detail": result}
+    profile = result.get('profile', {})
     return {
-        "level": data.get('level'),
-        "listen_songs": data.get('listenSongs'),
-        "listen_days": data.get('days'),
-        "next_level_songs": data.get('nextLoginCount'),
-        "next_level_days": data.get('nextPlayCount')
+        "level": result.get('level', profile.get('level')),
+        "listen_songs": result.get('listenSongs', profile.get('listenSongs')),
+        "create_days": result.get('createDays'),
+        "create_time": result.get('createTime'),
+        "nickname": profile.get('nickname'),
+        "vip_type": profile.get('vipType'),
     }
 
 # --- Tool Registry ---
