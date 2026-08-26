@@ -461,6 +461,12 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(length)) if length else {}
         method = body.get('method', '')
         req_id = body.get('id')
+        # Notifications and requests without id get 204 (no response body)
+        if method.startswith('notifications/') or req_id is None:
+            self.send_response(204)
+            self._cors()
+            self.end_headers()
+            return
         if method == 'initialize':
             result = {"protocolVersion": "2024-11-05", "capabilities": {"tools": {"listChanged": False}},
                       "serverInfo": {"name": "netease-music-mcp", "version": "3.1.0"}}
@@ -480,9 +486,6 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
                     result = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}], "isError": True}
             else:
                 result = {"content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}], "isError": True}
-        elif method == 'notifications/initialized':
-            self._json_response({"jsonrpc": "2.0", "id": req_id, "result": None})
-            return
         else:
             result = {"error": {"code": -32601, "message": f"Unknown method: {method}"}}
         response = {"jsonrpc": "2.0", "id": req_id, "result": result}
