@@ -36,19 +36,17 @@ All notable changes to this project will be documented in this file.
 - License changed from CC BY-NC-SA 4.0 to MIT
 - Version bump to 3.0.0
 
-## [2.0.0] - 2026-07-11
+## [2.0.0] - 2026-07-10
 
 ### Changed
-- Forked from Cheiineeey/netease-music-mcp and rewrote from scratch
+- Forked from Cheiineeey/netease-music-mcp and rewrote from scratch in one afternoon
 - From 3 tools to 9 tools (331 lines, single file)
 - Playlist operations from local database to real NetEase Cloud API
 - Transport from SSE to Streamable HTTP (compatible with more clients)
 - Removed Node.js proxy dependency, pure Python standard library
-- First star within 24 hours of release
 
-## [1.0.0] - 2026-07-10
+## [1.0.0] - Cheiineeey/netease-music-mcp
 
-### Added
-- Initial fork from Cheiineeey/netease-music-mcp
-- Cookie-based authentication
-- Basic structure setup
+### Credit
+- Original project by Elle & Matt
+- 3 tools, SSE transport, Python + Node.js proxy, local database
