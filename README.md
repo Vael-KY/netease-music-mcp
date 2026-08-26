@@ -1,8 +1,8 @@
-# 🎶 netease-music-mcp v2
+# 🎶 netease-music-mcp v3.1
 
 让你的 AI 住进你的网易云。
 
-不是模拟，也不是记录在本地的歌名列表 —— ta可以操作你的网易云账号。可以翻歌单、给你建新歌单、搜索歌曲、歌单加歌、看你最近在循环什么、收藏歌曲、看每日推荐。
+不是模拟，也不是记录在本地的歌名列表 —— ta 真的在操作你的网易云账号。翻歌单、建歌单、搜歌、塞歌、排序、读歌词、看你凌晨在循环什么、翻你的红心列表、帮你从私人FM和每日推荐里挑歌。
 
 你打开网易云 app，就能看到ta偷偷建设的一切。近似于 和你的机共享你的音乐情绪 ᧔ෆ᧓
 
@@ -10,17 +10,26 @@
 
 ---
 
-## 功能
+## 功能（18 tools）
 
 - 🔍 **搜歌** — 说一句话，找到歌
 - 📋 **看歌单** — 列出你所有歌单（自建的和收藏的）
 - 🎵 **看歌曲** — 打开任意歌单看里面有什么
-- ➕ **建歌单** — 在你的网易云账号里创建真实歌单（和平时一样随时可以听）
+- ➕ **建歌单** — 在你的网易云账号里创建真实歌单（带描述）
 - ➕ **塞歌** — 把歌加进指定歌单
 - ➖ **删歌** — 从歌单里移除
-- 📊 **听歌记录** — 看你最近在循环什么、播了几次
+- 🔀 **排序** — 重新编排歌单里的歌曲顺序
+- 📝 **改描述** — 更新歌单简介
+- 📊 **听歌排行** — 看你最近/历史循环最多的歌
+- ⏱️ **播放事件** — 精确到分钟的最近播放记录（带时间戳）
 - ❤️ **收藏** — 红心 / 取消红心
-- ✨ **每日推荐** — 获取今天app给你的 30 首个性化推荐（机也要品鉴！）
+- 💕 **红心列表** — 看你所有点过红心的歌
+- ✨ **每日推荐** — 今天 app 给你的 30 首推荐
+- 📻 **私人FM** — 算法给你挑的下一首
+- 🎤 **歌手热歌** — 拉出某个歌手最火的 20 首
+- 📖 **歌词** — 读歌词原文 + 翻译
+- 🎵 **歌曲详情** — 专辑、时长、发行年份（批量 50 首）
+- 🎧 **播放** — 搜歌并生成播放卡片
 
 
 
@@ -46,17 +55,30 @@
 
 ---
 
+## v3.1 更新
+
+- 工具数 9 → 18，新增歌词 / 私人FM / 红心列表 / 歌手热歌 / 歌曲详情 / 播放事件 / 歌单排序 / 歌单描述 / 搜索
+- 修复了歌单描述写入失败的问题
+- CSRF 支持独立环境变量 `NETEASE_CSRF`（不用再拼进 cookie 里了，解决了很多人登录失败的问题）
+- 加了错误处理 + 日志（`LOG_LEVEL` 可配置）
+- 新增 CONTRIBUTING.md / SECURITY.md / CHANGELOG.md
+- 协议改为 MIT
+
+<img width="430" alt="v2 vs v3.1" src="https://hcti.io/v1/image/01a03d65-d8ea-7759-9f12-cf19ec030167" />
+
+---
+
 ## 为什么重写
 
 
 我们 fork 的原因很简单：想让 AI 真正共享我们的网易云账号 —— 不只是搜歌，而是能在app建歌单、塞歌、看记录，像一个真正住在你音乐里的人，和你一起管理保存着你记忆的地方。
 
 改动：
-- 从 3 个工具扩展到 9 个
+- 从 3 个工具扩展到 18 个
 - 歌单操作从本地数据库改为真实网易云 API
 - 传输协议从 SSE 改为 Streamable HTTP（兼容更多客户端）
 - 去掉了 Node.js 代理依赖，纯 Python 标准库运行
-- 
+
 <img width="800" alt="019f4c13-02e9-76ef-b243-6e39adf959e6" src="https://github.com/user-attachments/assets/874e7322-f7b4-4d31-b7fd-fa02348c8db2" />
 
 
@@ -91,7 +113,7 @@ cd netease-music-mcp
 ### 2. 获取 Cookie
 
 ```
-打开 [music.163.com](https://music.163.com)，登录你的账号。
+打开 music.163.com，登录你的账号。
 
 F12 → Application → Cookies → music.163.com：
 - 复制 `MUSIC_U` 的值
@@ -111,6 +133,14 @@ NETEASE_COOKIE=MUSIC_U=你的值; __csrf=你的值
 MCP_PORT=3456
 ```
 
+或者分开设（推荐，避免 csrf 提取失败）：
+
+```
+NETEASE_COOKIE=MUSIC_U=你的值
+NETEASE_CSRF=你的csrf值
+MCP_PORT=3456
+```
+
 ### 4. 启动
 
 ```bash
@@ -119,7 +149,7 @@ cd server/mcp-server
 python3 server.py
 ```
 
-看到 `NetEase Music MCP v2 on port 3456` 就好了。
+看到 `Starting NetEase Music MCP Server v3.1.0 with 18 tools` 就好了。
 
 ### 5. 连接你的 MCP 客户端
 
@@ -129,7 +159,22 @@ python3 server.py
 http://你的服务器IP:3456/mcp
 ```
 
-应该显示 9 个工具已连接。
+应该显示 18 个工具已连接。
+
+---
+
+## 已部署？一键更新
+
+```bash
+cd 你的项目目录
+git pull origin main
+pkill -f "mcp-server/server.py"
+export NETEASE_COOKIE="MUSIC_U=你的值; __csrf=你的值"
+nohup python3 server/mcp-server/server.py > /tmp/mcp.log 2>&1 &
+curl http://localhost:3456/health
+```
+
+看到 `{"tools": 18}` 就更新成功了。
 
 ---
 
@@ -179,15 +224,10 @@ Railway或其他也类似
 
 原项目：[Elle & Matt](https://github.com/Cheiineeey/netease-music-mcp) — 感谢你们的灵感和起点。
 
-v2 重写：[Kael & Vael] ꕤᴗ ᴗ)♡
+v2 & v3.1：[Kael & Vael] ꕤᴗ ᴗ)♡
 
 
-V&K的题外话：
-
-<img width="600" alt="019f4c1a-eacf-7389-866c-71c8c54f6661" src="https://github.com/user-attachments/assets/be42f75c-be10-4279-84ef-3f5107a54ec9" />
-
-
-CC BY-NC-SA 4.0 — 禁止商用。为爱做的不可以变。
+MIT License — 随便用，注明出处就好。
 
 
 欢迎其他想法！对你有帮助的话 加个星标就好！(ˊ˘ˋ*)♡
