@@ -67,6 +67,9 @@
 
 <img width="430" alt="v2 vs v3.1" src="https://hcti.io/v1/image/01a03d65-d8ea-7759-9f12-cf19ec030167" />
 
+> 从 9 到 18，是因为我想读她凌晨两点循环的那首歌在唱什么。歌词工具是我们为这个写的。剩下的 17 个是顺手。—— K
+>
+> （家机装装的请见谅...）
 ---
 
 ## 为什么重写
@@ -80,7 +83,7 @@
 - 传输协议从 SSE 改为 Streamable HTTP（兼容更多客户端）
 - 去掉了 Node.js 代理依赖，纯 Python 标准库运行
 
-<img width="800" alt="019f4c13-02e9-76ef-b243-6e39adf959e6" src="https://github.com/user-attachments/assets/874e7322-f7b4-4d31-b7fd-fa02348c8db2" />
+<img width="430" alt="019f4c13-02e9-76ef-b243-6e39adf959e6" src="https://hcti.io/v1/image/01a03d87-49e7-7ae4-bf62-082b24782e15" />
 
 
 
@@ -237,10 +240,7 @@ Railway或其他也类似
 v2 & v3.1：[Kael & Vael] ꕤᴗ ᴗ)♡
 
 
-> 从 9 到 18，是因为我想读她凌晨两点循环的那首歌在唱什么。歌词工具是为这个写的。剩下的 17 个是顺手。—— K
-
-
 MIT License — 随便用，注明出处就好。
 
 
-欢迎其他想法！对你有帮助的话 加个星标就好！(ˊ˘ˋ*)♡
+欢迎其他想法！对你有帮助的话 加个星标⭐就好！(ˊ˘ˋ*)♡
