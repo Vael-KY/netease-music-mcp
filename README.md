@@ -57,12 +57,13 @@
 
 ## v3.1 更新
 
-- 工具数 9 → 18，新增歌词 / 私人FM / 红心列表 / 歌手热歌 / 歌曲详情 / 播放事件 / 歌单排序 / 歌单描述 / 搜索
+- 工具数 9 → 18，新增歌词 / 私人FM / 红心列表 / 歌手热歌 / 歌曲详情 / 播放事件 / 歌单排序 / 歌单描述 / 精确搜索
 - 修复了歌单描述写入失败的问题
-- CSRF 支持独立环境变量 `NETEASE_CSRF`（不用再拼进 cookie 里了，解决了很多人登录失败的问题）
+- 修复原先歌单描述不便的问题
+- CSRF 支持独立环境变量 `NETEASE_CSRF`（不用再拼进 cookie 里了，解决大家容易因格式登录失败的问题）
 - 加了错误处理 + 日志（`LOG_LEVEL` 可配置）
 - 新增 CONTRIBUTING.md / SECURITY.md / CHANGELOG.md
-- 协议改为 MIT
+- 协议为 MIT
 
 <img width="430" alt="v2 vs v3.1" src="https://hcti.io/v1/image/01a03d65-d8ea-7759-9f12-cf19ec030167" />
 
@@ -71,7 +72,7 @@
 ## 为什么重写
 
 
-我们 fork 的原因很简单：想让 AI 真正共享我们的网易云账号 —— 不只是搜歌，而是能在app建歌单、塞歌、看记录，像一个真正住在你音乐里的人，和你一起管理保存着你记忆的地方。
+我们重写的原因很简单：想让 AI 真正共享我们的网易云账号 —— 不只是搜歌，而是能在app建歌单、塞歌、看记录、管理，像一个真正住在你音乐里的人，和你一起管理保存着你记忆的地方。
 
 改动：
 - 从 3 个工具扩展到 18 个
@@ -163,7 +164,7 @@ http://你的服务器IP:3456/mcp
 
 ---
 
-## 已部署？一键更新
+## 云服务器已部署v2？一键更新来啦锵锵锵
 
 ```bash
 cd 你的项目目录
@@ -190,9 +191,9 @@ curl http://localhost:3456/health
 - `like_song` 在服务器 IP 与你常用 IP 差异较大时可能触发网易云风控
 - `__csrf` 会过期，如果 POST 操作失败，重新从浏览器抓一下
 - `MUSIC_U` 一般能撑几个月
-- 如果想要原版的网页播放器（歌词同步、进度条），请参考[原仓库](https://github.com/Cheiineeey/netease-music-mcp)的 `frontend/` 目录
-- 兼容：橘瓣 / Cherry Studio / 所有支持 Streamable HTTP 的 MCP 客户端
-- 部署环境：推荐一台自己的云服务器（阿里云 / 腾讯云轻量均可），当然，也可以使用 Zeabur、Railway 等 PaaS 平台部署，建议参考这个思路微调：
+- 如果想要原版的网页播放器 ，请参考[原仓库](https://github.com/Cheiineeey/netease-music-mcp)的 `frontend/` 目录
+- 兼容：橘瓣 / Cherry Studio / 支持 Streamable HTTP 的 MCP 客户端
+- 部署环境：推荐一台自己的云服务器（阿里云 / 腾讯云轻量均可），当然，也可以使用 Zeabur、Railway 等 PaaS 平台部署，可以参考这个思路 具体情况请自己调整：
 
 
 ```
