@@ -35,6 +35,9 @@ All notable changes to this project will be documented in this file.
 - License changed from CC BY-NC-SA 4.0 to MIT
 - Version bump to 3.0.0
 
+### Acknowledgment
+- Tool coverage planning for v3.0/v3.1 was inspired in part by community implementations, including [@Rainlxyl/netease-music-mcp-safe](https://github.com/Rainlxyl/netease-music-mcp-safe).
+
 ## [2.0.0] - 2026-07-10
 
 ### Changed
