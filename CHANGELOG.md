@@ -10,7 +10,6 @@ All notable changes to this project will be documented in this file.
 - `get_artist_hot_songs` tool: Get an artist's top 20 most popular songs
 - `get_personal_fm` tool: Get personalized FM recommendations
 - `get_liked_songs` tool: Get full list of user's liked (red heart) song IDs
-- `get_user_level` tool: Get user level, listening days, and total play count
 - Independent `NETEASE_CSRF` environment variable support (fallback to cookie extraction)
 
 ### Changed
