@@ -444,7 +444,7 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             return
         if method == 'initialize':
-            result = {"protocolVersion": "2024-11-05", "capabilities": {"tools": {"listChanged": False}},
+            result = {"protocolVersion": "2025-03-26", "capabilities": {"tools": {"listChanged": False}},
                       "serverInfo": {"name": "netease-music-mcp", "version": "3.1.0"}}
         elif method == 'tools/list':
             result = {"tools": TOOLS}
