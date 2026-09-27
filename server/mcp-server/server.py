@@ -7,19 +7,54 @@ for playlist management, music discovery, and listening history analysis.
 GitHub: https://github.com/Vael-KY/netease-music-mcp
 License: MIT
 """
-import http.server, json, os, urllib.request, urllib.parse, threading, uuid, time, logging
+import hashlib, hmac, http.server, json, os, sys, urllib.request, urllib.parse, threading, uuid, time, logging
 from http.server import HTTPServer
 
 # --- Configuration ---
+VERSION = "3.2.0"
 NETEASE_COOKIE = os.environ.get("NETEASE_COOKIE", "")
 NETEASE_CSRF = os.environ.get("NETEASE_CSRF", "")
 PORT = int(os.environ.get("MCP_PORT", "3456"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+# Required shared secret. Clients must send: Authorization: Bearer <token>
+MCP_BEARER_TOKEN = os.environ.get("MCP_BEARER_TOKEN", "").strip()
+MIN_TOKEN_LENGTH = 16
+MAX_TOKEN_LENGTH = 512
 SESSION_ID = str(uuid.uuid4())
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO),
                     format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("mcp-netease")
+
+def _token_digest(token):
+    return hashlib.sha256(token.encode('utf-8')).digest()
+
+# Digest of the configured secret. Empty when auth is not configured;
+# request checks then fail closed.
+_AUTH_DIGEST = _token_digest(MCP_BEARER_TOKEN) if MCP_BEARER_TOKEN else b''
+
+def validate_bearer_config():
+    """Refuse to start unless a usable bearer token is configured."""
+    if len(MCP_BEARER_TOKEN) < MIN_TOKEN_LENGTH or len(MCP_BEARER_TOKEN) > MAX_TOKEN_LENGTH:
+        logger.error(
+            "MCP_BEARER_TOKEN is required (%d-%d characters). "
+            "Generate one with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            % (MIN_TOKEN_LENGTH, MAX_TOKEN_LENGTH)
+        )
+        return False
+    return True
+
+def bearer_matches(header):
+    """True only when header is `Bearer <configured token>`. Constant-time compare."""
+    if not _AUTH_DIGEST or not header:
+        return False
+    scheme, _, presented = header.partition(' ')
+    if scheme.lower() != 'bearer':
+        return False
+    presented = presented.strip()
+    if not presented or len(presented) > MAX_TOKEN_LENGTH:
+        return False
+    return hmac.compare_digest(_token_digest(presented), _AUTH_DIGEST)
 
 # --- CSRF Helper ---
 def get_csrf():
@@ -447,14 +482,38 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(204)
         self._cors()
         self.end_headers()
+    def _unauthorized(self):
+        # Path only: never log the Authorization header or token.
+        path = self.path.split('?', 1)[0]
+        logger.warning("Rejected unauthorized %s %s from %s" % (self.command, path, self.client_address[0]))
+        body = json.dumps({"error": "unauthorized"}).encode()
+        self.send_response(401)
+        self._cors()
+        self.send_header('WWW-Authenticate', 'Bearer realm="netease-music-mcp"')
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(body))
+        self.end_headers()
+        self.wfile.write(body)
+    def _require_auth(self):
+        if bearer_matches(self.headers.get('Authorization', '')):
+            return True
+        self._unauthorized()
+        return False
     def do_GET(self):
-        if self.path == '/health':
-            self._json_response({"status": "ok", "tools": len(TOOLS), "version": "3.1.0"})
-        elif self.path == '/sse':
+        path = self.path.split('?', 1)[0]
+        # Liveness only. No account data.
+        if path == '/health':
+            self._json_response({"status": "ok", "tools": len(TOOLS), "version": VERSION})
+            return
+        if not self._require_auth():
+            return
+        if path == '/sse':
             self._handle_sse()
         else:
             self._json_response({"error": "Not found"}, 404)
     def do_POST(self):
+        if not self._require_auth():
+            return
         length = int(self.headers.get('Content-Length', 0))
         body = json.loads(self.rfile.read(length)) if length else {}
         method = body.get('method', '')
@@ -467,7 +526,7 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
             return
         if method == 'initialize':
             result = {"protocolVersion": "2025-03-26", "capabilities": {"tools": {"listChanged": False}},
-                      "serverInfo": {"name": "netease-music-mcp", "version": "3.1.0"}}
+                      "serverInfo": {"name": "netease-music-mcp", "version": VERSION}}
         elif method == 'tools/list':
             result = {"tools": TOOLS}
         elif method == 'tools/call':
@@ -522,7 +581,10 @@ class ThreadedHTTPServer(HTTPServer):
             self.shutdown_request(request)
 
 if __name__ == '__main__':
-    logger.info(f"Starting NetEase Music MCP Server v3.1.0 with {len(TOOLS)} tools on port {PORT}")
+    if not validate_bearer_config():
+        sys.exit(1)
+    logger.info(f"Starting NetEase Music MCP Server v{VERSION} with {len(TOOLS)} tools on port {PORT}")
+    logger.info("Bearer auth enabled for all endpoints except /health")
     server = ThreadedHTTPServer(('0.0.0.0', PORT), MCPHandler)
     try:
         server.serve_forever()

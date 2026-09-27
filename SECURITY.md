@@ -31,7 +31,10 @@ If you discover a security vulnerability, please report it responsibly:
 ### Network Security
 - By default, the server binds to `0.0.0.0` for container deployments
 - In production, use a reverse proxy with HTTPS
-- No authentication is required by default - deploy behind a firewall or add your own auth layer
+- Every endpoint except `GET /health` requires `Authorization: Bearer <MCP_BEARER_TOKEN>`
+- The server refuses to start when `MCP_BEARER_TOKEN` is missing or shorter than 16 characters
+- The token is compared in constant time and is never written to logs
+- `GET /health` returns only status, tool count, and version — no account data
 
 ### Data Privacy
 - This server accesses your personal NetEase Cloud Music account
@@ -42,7 +45,8 @@ If you discover a security vulnerability, please report it responsibly:
 ## Best Practices for Deployment
 
 1. Use environment variables for all secrets
-2. Run behind a reverse proxy with TLS
-3. Restrict network access to trusted clients only
-4. Rotate your NetEase cookie periodically
-5. Monitor logs for unusual API call patterns
+2. Set a long random `MCP_BEARER_TOKEN` and send it only in the `Authorization` header
+3. Run behind a reverse proxy with TLS
+4. Restrict network access to trusted clients only
+5. Rotate your NetEase cookie and the bearer token periodically
+6. Monitor logs for unauthorized requests
