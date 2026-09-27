@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-09-27
+
+### Added
+- Bearer token authentication via `MCP_BEARER_TOKEN`
+- Clients must send `Authorization: Bearer <token>` on every endpoint except `GET /health`
+- Server exits on startup when the token is missing or shorter than 16 characters
+
+### Security
+- Unauthorized requests receive `401` and `WWW-Authenticate: Bearer`
+- Token comparison is constant-time; the token is never logged
+
 ## [3.1.0] - 2026-08-26
 
 ### Added

@@ -93,6 +93,7 @@
 MCP 客户端（橘瓣 / Cherry Studio / etc.）
 │
 │  POST /mcp (JSON-RPC)
+│  Authorization: Bearer <MCP_BEARER_TOKEN>
 ▼
 server.py（Python，端口 3456）
 │
@@ -134,6 +135,7 @@ cp .env.example .env
 
 ```
 NETEASE_COOKIE=MUSIC_U=你的值; __csrf=你的值
+MCP_BEARER_TOKEN=至少16位的随机字符串
 MCP_PORT=3456
 ```
 
@@ -142,7 +144,14 @@ MCP_PORT=3456
 ```
 NETEASE_COOKIE=MUSIC_U=你的值
 NETEASE_CSRF=你的csrf值
+MCP_BEARER_TOKEN=至少16位的随机字符串
 MCP_PORT=3456
+```
+
+`MCP_BEARER_TOKEN` 必填。没设、或短于 16 位，服务会直接退出。生成一个：
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 ### 4. 启动
@@ -153,15 +162,38 @@ cd server/mcp-server
 python3 server.py
 ```
 
-看到 `Starting NetEase Music MCP Server v3.1.0 with 18 tools` 就好了。
+看到 `Starting NetEase Music MCP Server v3.2.0 with 18 tools` 就好了。没配 `MCP_BEARER_TOKEN` 时进程会退出，不会在没有认证的情况下监听端口。
 
 ### 5. 连接你的 MCP 客户端
 
-添加 MCP 端点：
+添加 MCP 端点，并带上 Bearer Token：
 
 ```
 http://你的服务器IP:3456/mcp
 ```
+
+请求头：
+
+```
+Authorization: Bearer 你的MCP_BEARER_TOKEN
+```
+
+支持自定义 Header 的客户端可以这样配：
+
+```json
+{
+  "mcpServers": {
+    "netease": {
+      "url": "http://你的服务器IP:3456/mcp",
+      "headers": {
+        "Authorization": "Bearer 你的MCP_BEARER_TOKEN"
+      }
+    }
+  }
+}
+```
+
+没带这个头、或 token 不对，接口返回 `401`，不会读到歌单、播放记录或其他账号数据。`GET /health` 只返回状态，不需要 token。
 
 应该显示 18 个工具已连接。
 
@@ -174,6 +206,7 @@ cd 你的项目目录
 git pull origin main
 pkill -f "mcp-server/server.py"
 export NETEASE_COOKIE="MUSIC_U=你的值; __csrf=你的值"
+export MCP_BEARER_TOKEN="你的至少16位随机token"
 nohup python3 server/mcp-server/server.py > /tmp/mcp.log 2>&1 &
 curl http://localhost:3456/health
 ```
@@ -212,10 +245,11 @@ Zeabur部署：
 
    - `MCP_PORT` = `8080`（Zeabur默认暴露这个）
    - `NETEASE_COOKIE` = `MUSIC_U=你的值; __csrf=你的值`
+   - `MCP_BEARER_TOKEN` = 至少 16 位的随机字符串
 
 5. 端口设置里暴露 `8080`，协议选 HTTP
 
-6. 部署完之后MCP端点就是：`https://你的应用名.zeabur.app/mcp`
+6. 部署完之后 MCP 端点就是：`https://你的应用名.zeabur.app/mcp`，客户端请求头带 `Authorization: Bearer <MCP_BEARER_TOKEN>`
 
 Railway或其他也类似
 

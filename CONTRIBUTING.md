@@ -6,7 +6,7 @@ Thank you for your interest in contributing! This project aims to stay lightweig
 
 1. Fork the repository
 2. Clone your fork locally
-3. Copy `.env.example` to `.env` and fill in your NetEase cookie
+3. Copy `.env.example` to `.env` and fill in your NetEase cookie and `MCP_BEARER_TOKEN`
 4. Run the server: `python server/mcp-server/server.py`
 5. Test with the `/health` endpoint
 
