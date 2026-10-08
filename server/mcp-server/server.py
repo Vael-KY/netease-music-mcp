@@ -560,7 +560,7 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
             return
         if method == 'initialize':
             result = {"protocolVersion": "2025-03-26", "capabilities": {"tools": {"listChanged": False}},
-                      "serverInfo": {"name": "netease-music-mcp", "version": "3.1.0"}}
+                      "serverInfo": {"name": "netease-music-mcp", "version": "3.2.0"}}
         elif method == 'tools/list':
             result = {"tools": TOOLS}
         elif method == 'tools/call':
