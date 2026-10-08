@@ -619,7 +619,7 @@ class ThreadedHTTPServer(HTTPServer):
             self.shutdown_request(request)
 
 if __name__ == '__main__':
-    logger.info(f"Starting NetEase Music MCP Server v3.1.0 with {len(TOOLS)} tools on port {PORT}")
+    logger.info(f"Starting NetEase Music MCP Server v3.2.0 with {len(TOOLS)} tools on port {PORT}")
     server = ThreadedHTTPServer(('0.0.0.0', PORT), MCPHandler)
     try:
         server.serve_forever()
