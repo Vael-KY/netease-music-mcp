@@ -542,7 +542,7 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
     def do_GET(self):
         if self.path == '/health':
-            self._json_response({"status": "ok", "tools": len(TOOLS), "version": "3.1.0"})
+            self._json_response({"status": "ok", "tools": len(TOOLS), "version": "3.2.0"})
         elif self.path == '/sse':
             self._handle_sse()
         else:
