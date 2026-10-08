@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-10-08
+
+### Fixed
+- `create_playlist` returned `403 illegal request` after NetEase tightened the plain `/api/playlist/create` endpoint. It now uses the encrypted weapi channel, with automatic fallback to the legacy endpoint.
+
+### Added
+- Zero-dependency weapi encryption: pure-Python AES-128-CBC + RSA (`pow`), no `pycryptodome` required. The project remains a single file using only the Python standard library.
+
 ## [3.1.0] - 2026-08-26
 
 ### Added
