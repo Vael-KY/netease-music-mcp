@@ -280,10 +280,15 @@ def create_playlist(params):
     privacy = params.get('privacy', 0)
     desc = params.get('description', '')
     csrf = get_csrf()
-    data = {'name': name, 'privacy': privacy, 'csrf_token': csrf}
-    result = netease_request(f'/api/playlist/create?csrf_token={csrf}', data)
+    # Primary: encrypted weapi channel (plain /api/playlist/create returns 403 since ~Oct 2026)
+    result = netease_weapi('/playlist/create', {'name': name, 'privacy': str(privacy), 'type': 'NORMAL'})
     if not result or result.get('code') != 200:
-        return {"error": "Failed to create playlist", "detail": result}
+        logger.warning(f"weapi create failed, falling back to legacy api: {result}")
+        data = {'name': name, 'privacy': privacy, 'type': 'NORMAL', 'csrf_token': csrf}
+        legacy = netease_request(f'/api/playlist/create?csrf_token={csrf}', data)
+        if not legacy or legacy.get('code') != 200:
+            return {"error": "Failed to create playlist", "detail": {"weapi": result, "legacy": legacy}}
+        result = legacy
     pid = result.get('id') or result.get('playlist', {}).get('id')
     # Set description if provided
     desc_status = ""
