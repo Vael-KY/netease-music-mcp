@@ -8,6 +8,7 @@ GitHub: https://github.com/Vael-KY/netease-music-mcp
 License: MIT
 """
 import http.server, json, os, urllib.request, urllib.parse, threading, uuid, time, logging
+import base64, secrets, string
 from http.server import HTTPServer
 
 # --- Configuration ---
