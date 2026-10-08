@@ -386,27 +386,6 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}},
 ]
 
-def get_user_level(params):
-    """Get user level, listen stats, and account age."""
-    uid_result = netease_request('/api/w/nuser/account/get', method='GET')
-    if not uid_result or uid_result.get('code') != 200:
-        return {"error": "Failed to get user info"}
-    uid = uid_result.get('account', {}).get('id')
-    if not uid:
-        return {"error": "Cannot determine user ID"}
-    result = netease_request(f'/api/user/detail?uid={uid}', method='GET')
-    if not result or result.get('code') != 200:
-        return {"error": "Failed to get user detail", "detail": result}
-    profile = result.get('profile', {})
-    return {
-        "level": result.get('level', profile.get('level')),
-        "listen_songs": result.get('listenSongs', profile.get('listenSongs')),
-        "create_days": result.get('createDays'),
-        "create_time": result.get('createTime'),
-        "nickname": profile.get('nickname'),
-        "vip_type": profile.get('vipType'),
-    }
-
 TOOL_DISPATCH = {
     "search_song": search_song,
     "play_music": play_music,
@@ -426,7 +405,6 @@ TOOL_DISPATCH = {
     "get_artist_hot_songs": get_artist_hot_songs,
     "get_personal_fm": get_personal_fm,
     "get_liked_songs": get_liked_songs,
-    "get_user_level": get_user_level,
 }
 
 # --- MCP Protocol Handler ---
@@ -479,13 +457,17 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
                 try:
                     tool_result = handler(arguments)
                     result = {"content": [{"type": "text", "text": json.dumps(tool_result, ensure_ascii=False)}]}
+                    if isinstance(tool_result, dict) and "error" in tool_result:
+                        result["isError"] = True
                 except Exception as e:
                     logger.error(f"Tool error [{tool_name}]: {e}")
                     result = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}], "isError": True}
             else:
                 result = {"content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}], "isError": True}
         else:
-            result = {"error": {"code": -32601, "message": f"Unknown method: {method}"}}
+            self._json_response({"jsonrpc": "2.0", "id": req_id,
+                                 "error": {"code": -32601, "message": f"Unknown method: {method}"}})
+            return
         response = {"jsonrpc": "2.0", "id": req_id, "result": result}
         self._json_response(response)
     def _handle_sse(self):
