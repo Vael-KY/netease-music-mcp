@@ -54,6 +54,115 @@ def netease_request(path, data=None, method='POST'):
         logger.error(f"NetEase API error [{path}]: {e}")
         return {"code": -1, "error": str(e)}
 
+# --- weapi Encryption (pure Python, zero dependencies) ---
+# Some endpoints (e.g. playlist creation) now reject plain /api/ requests.
+# NetEase's web client uses "weapi": AES-128-CBC twice + RSA on the key.
+# AES is implemented below in pure Python so the project stays dependency-free.
+
+_WEAPI_PRESET_KEY = b'0CoJUm6Qyw8W8jud'
+_WEAPI_IV = b'0102030405060708'
+_WEAPI_PUB_E = 0x010001
+_WEAPI_MODULUS = int(
+    '00e0b509f6259df8642dbc35662901477df22677ec152b5ff68ace615bb7b725152b3ab17a876aea8a5aa76d2e417629ec'
+    '4ee341f56135fccf695280104e0312ecbda92557c93870114af6c9d05c4f7f0c3685b7a46bee255932575cce10b424d8'
+    '13cfe4875d3e82047b97ddef52741d546b8e289dc6935b3ece0462db0a22b8e7', 16)
+
+def _rotl8(x, s):
+    return ((x << s) | (x >> (8 - s))) & 0xFF
+
+def _xtime(a):
+    return ((a << 1) ^ 0x1B) & 0xFF if a & 0x80 else a << 1
+
+def _build_sbox():
+    sbox = [0] * 256
+    p = q = 1
+    while True:
+        p = p ^ ((p << 1) & 0xFF) ^ (0x1B if p & 0x80 else 0)
+        q ^= q << 1
+        q ^= q << 2
+        q ^= q << 4
+        q &= 0xFF
+        if q & 0x80:
+            q ^= 0x09
+        x = q ^ _rotl8(q, 1) ^ _rotl8(q, 2) ^ _rotl8(q, 3) ^ _rotl8(q, 4)
+        sbox[p] = x ^ 0x63
+        if p == 1:
+            break
+    sbox[0] = 0x63
+    return sbox
+
+_SBOX = _build_sbox()
+
+def _expand_key(key):
+    w = [list(key[i:i + 4]) for i in range(0, 16, 4)]
+    rcon = 1
+    for i in range(4, 44):
+        t = list(w[i - 1])
+        if i % 4 == 0:
+            t = t[1:] + t[:1]
+            t = [_SBOX[b] for b in t]
+            t[0] ^= rcon
+            rcon = _xtime(rcon)
+        w.append([w[i - 4][j] ^ t[j] for j in range(4)])
+    return [sum(w[r * 4:r * 4 + 4], []) for r in range(11)]
+
+def _encrypt_block(block, rks):
+    s = [b ^ k for b, k in zip(block, rks[0])]
+    for r in range(1, 11):
+        s = [_SBOX[b] for b in s]
+        s = [s[((i // 4 + i % 4) % 4) * 4 + i % 4] for i in range(16)]
+        if r != 10:
+            m = []
+            for c in range(4):
+                a = s[c * 4:c * 4 + 4]
+                t = a[0] ^ a[1] ^ a[2] ^ a[3]
+                m += [a[i] ^ t ^ _xtime(a[i] ^ a[(i + 1) % 4]) for i in range(4)]
+            s = m
+        s = [b ^ k for b, k in zip(s, rks[r])]
+    return s
+
+def _aes_cbc_encrypt(data, key, iv):
+    pad = 16 - len(data) % 16
+    data = data + bytes([pad]) * pad
+    rks = _expand_key(key)
+    prev = list(iv)
+    out = bytearray()
+    for i in range(0, len(data), 16):
+        prev = _encrypt_block([b ^ p for b, p in zip(data[i:i + 16], prev)], rks)
+        out += bytes(prev)
+    return bytes(out)
+
+def weapi_encrypt(payload):
+    """Encrypt a dict into weapi form fields {params, encSecKey}."""
+    text = json.dumps(payload).encode()
+    alphabet = string.ascii_letters + string.digits
+    secret = ''.join(secrets.choice(alphabet) for _ in range(16)).encode()
+    first = base64.b64encode(_aes_cbc_encrypt(text, _WEAPI_PRESET_KEY, _WEAPI_IV))
+    params = base64.b64encode(_aes_cbc_encrypt(first, secret, _WEAPI_IV)).decode()
+    rs = pow(int(secret[::-1].hex(), 16), _WEAPI_PUB_E, _WEAPI_MODULUS)
+    return {'params': params, 'encSecKey': format(rs, 'x').zfill(256)}
+
+def netease_weapi(path, payload):
+    """Make an authenticated weapi (encrypted) request. path like '/playlist/create'."""
+    csrf = get_csrf()
+    payload = dict(payload, csrf_token=csrf)
+    url = f'https://music.163.com/weapi{path}?csrf_token={csrf}'
+    headers = {
+        'Cookie': NETEASE_COOKIE,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Referer': 'https://music.163.com/',
+        'Origin': 'https://music.163.com',
+    }
+    try:
+        body = urllib.parse.urlencode(weapi_encrypt(payload)).encode()
+        req = urllib.request.Request(url, data=body, headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        logger.error(f"NetEase weapi error [{path}]: {e}")
+        return {"code": -1, "error": str(e)}
+
 # --- Tool Implementations ---
 
 def search_song(params):
