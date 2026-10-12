@@ -7,39 +7,151 @@ for playlist management, music discovery, and listening history analysis.
 GitHub: https://github.com/Vael-KY/netease-music-mcp
 License: MIT
 """
-import http.server, json, os, urllib.request, urllib.parse, threading, uuid, time, logging
+import http.server, json, os, urllib.request, urllib.parse, urllib.error, threading, uuid, time, logging
 import base64, secrets, string
 from http.server import HTTPServer
+
+VERSION = "3.2.1"
+
+# --- .env loading ---
+def _load_dotenv():
+    """Load KEY=VALUE lines from a .env file; variables already in the environment win.
+
+    Done here instead of `export $(cat .env | xargs)`: a Cookie value contains spaces
+    and ';', which that shell idiom splits apart, silently dropping __csrf.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    for base in (os.getcwd(), os.path.dirname(os.path.dirname(here)), here):
+        path = os.path.join(base, '.env')
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#') or '=' not in line:
+                        continue
+                    key, _, value = line.partition('=')
+                    key, value = key.strip(), value.strip()
+                    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+                        value = value[1:-1]
+                    if key and key not in os.environ:
+                        os.environ[key] = value
+        except OSError:
+            pass
+        return
+
+_load_dotenv()
 
 # --- Configuration ---
 NETEASE_COOKIE = os.environ.get("NETEASE_COOKIE", "")
 NETEASE_CSRF = os.environ.get("NETEASE_CSRF", "")
+NETEASE_UID = os.environ.get("NETEASE_UID", "")  # optional; looked up automatically if empty
 PORT = int(os.environ.get("MCP_PORT", "3456"))
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 SESSION_ID = str(uuid.uuid4())
+try:
+    TZ_OFFSET_HOURS = float(os.environ.get("NETEASE_TZ_OFFSET", "0"))  # timezone of timestamps in tool output
+except ValueError:
+    TZ_OFFSET_HOURS = 0.0
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO),
                     format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("mcp-netease")
 
-# --- CSRF Helper ---
+# --- Cookie / CSRF helpers ---
+# NetEase's web client always sends a full cookie jar (device ids, __csrf, ...), and its
+# gateway may reject incomplete cookies on playlist create/update. Missing cookies are
+# filled with defaults used by community NeteaseCloudMusicApi projects; whether this
+# resolves a particular 403 still needs an authenticated live test.
+# Whatever you put in NETEASE_COOKIE always wins; nothing you supplied is overridden.
+_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+       'Chrome/124.0.0.0 Safari/537.36')
+
+def _parse_cookie(raw):
+    """'a=1; b=2' -> {'a': '1', 'b': '2'}. A bare value without '=' is taken as MUSIC_U."""
+    raw = (raw or '').strip()
+    if raw and '=' not in raw:
+        raw = 'MUSIC_U=' + raw
+    jar = {}
+    for part in raw.split(';'):
+        key, sep, value = part.strip().partition('=')
+        if sep and key:
+            jar[key] = value.strip()
+    return jar
+
+_DEVICE = {}
+
+def _device_cookies():
+    """A fake-but-consistent device identity, generated once per process."""
+    if not _DEVICE:
+        nuid = secrets.token_hex(16)
+        now_ms = int(time.time() * 1000)
+        tag = ''.join(secrets.choice(string.ascii_lowercase) for _ in range(6))
+        _DEVICE.update({
+            '__remember_me': 'true', 'ntes_kaola_ad': '1',
+            '_ntes_nuid': nuid, '_ntes_nnid': f'{nuid},{now_ms}',
+            'WNMCID': f'{tag}.{now_ms}.01.0', 'WEVNSM': '1.0.0',
+            'NMTID': '00O' + secrets.token_hex(19),
+            'os': 'pc', 'appver': '3.1.17.204416',
+            'osver': 'Microsoft-Windows-10-Professional-build-19045-64bit',
+            'channel': 'netease',
+        })
+    return _DEVICE
+
+def build_cookie_header():
+    jar = _parse_cookie(NETEASE_COOKIE)
+    if NETEASE_CSRF and '__csrf' not in jar:
+        jar['__csrf'] = NETEASE_CSRF  # the csrf_token we send must also be present as a cookie
+    for key, value in _device_cookies().items():
+        jar.setdefault(key, value)
+    return '; '.join(f'{k}={v}' for k, v in jar.items())
+
 def get_csrf():
-    if NETEASE_CSRF:
-        return NETEASE_CSRF
-    for part in NETEASE_COOKIE.split(';'):
-        part = part.strip()
-        if part.startswith('__csrf='):
-            return part.split('=', 1)[1]
-    return ''
+    return _parse_cookie(NETEASE_COOKIE).get('__csrf') or NETEASE_CSRF or ''
+
+def _hint(*results):
+    """Short, actionable explanation for the usual failure codes."""
+    codes = {r.get('code') for r in results if isinstance(r, dict)}
+    if 403 in codes:
+        return ("403 illegal request: put the FULL Cookie header copied from music.163.com "
+                "(DevTools > Network > any request > Cookie) into NETEASE_COOKIE; "
+                "it must contain MUSIC_U and __csrf")
+    if 301 in codes:
+        return "Not logged in or session expired: refresh MUSIC_U / __csrf in NETEASE_COOKIE"
+    if -460 in codes or 460 in codes:
+        return "NetEase risk control flagged this server's IP or cookie; retry later or use the full browser cookie"
+    return None
+
+def _with_hint(result):
+    hint = _hint(result)
+    return dict(result, hint=hint) if hint else result
+
+def _http_error_result(path, e):
+    """Turn an HTTPError into a result dict that keeps NetEase's own error body."""
+    try:
+        raw = e.read().decode('utf-8', 'replace')
+    except Exception:
+        raw = ''
+    logger.error("NetEase HTTP %s [%s]", e.code, path.split('?', 1)[0])
+    try:
+        body = json.loads(raw)
+        if isinstance(body, dict):
+            body.setdefault('code', e.code)
+            body['http_status'] = e.code
+            return body
+    except ValueError:
+        pass
+    return {"code": e.code, "error": f"HTTP {e.code}: {e.reason}", "body": raw[:300]}
 
 # --- NetEase API Helper ---
 def netease_request(path, data=None, method='POST'):
-    """Make authenticated request to NetEase Cloud Music API."""
+    """Plain /api/ request (body not encrypted). Fine for public/read endpoints."""
     url = f'https://music.163.com{path}'
     headers = {
-        'Cookie': NETEASE_COOKIE,
+        'Cookie': build_cookie_header(),
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': _UA,
         'Referer': 'https://music.163.com/',
     }
     try:
@@ -50,8 +162,10 @@ def netease_request(path, data=None, method='POST'):
         req = urllib.request.Request(url, data=body, headers=headers, method=method)
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return _http_error_result(path, e)
     except Exception as e:
-        logger.error(f"NetEase API error [{path}]: {e}")
+        logger.error("NetEase API error [%s]: %s", path.split('?', 1)[0], type(e).__name__)
         return {"code": -1, "error": str(e)}
 
 # --- weapi Encryption (pure Python, zero dependencies) ---
@@ -142,15 +256,15 @@ def weapi_encrypt(payload):
     rs = pow(int(secret[::-1].hex(), 16), _WEAPI_PUB_E, _WEAPI_MODULUS)
     return {'params': params, 'encSecKey': format(rs, 'x').zfill(256)}
 
-def netease_weapi(path, payload):
+def netease_weapi(path, payload=None):
     """Make an authenticated weapi (encrypted) request. path like '/playlist/create'."""
     csrf = get_csrf()
-    payload = dict(payload, csrf_token=csrf)
+    payload = dict(payload or {}, csrf_token=csrf)
     url = f'https://music.163.com/weapi{path}?csrf_token={csrf}'
     headers = {
-        'Cookie': NETEASE_COOKIE,
+        'Cookie': build_cookie_header(),
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'User-Agent': _UA,
         'Referer': 'https://music.163.com/',
         'Origin': 'https://music.163.com',
     }
@@ -159,9 +273,84 @@ def netease_weapi(path, payload):
         req = urllib.request.Request(url, data=body, headers=headers, method='POST')
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return _http_error_result(f'/weapi{path}', e)
     except Exception as e:
-        logger.error(f"NetEase weapi error [{path}]: {e}")
+        logger.error("NetEase weapi error [%s]: %s", path.split('?', 1)[0], type(e).__name__)
         return {"code": -1, "error": str(e)}
+
+# Codes meaning "the gateway refused this route/format" (worth trying the other route),
+# as opposed to business errors such as 502 "song already in playlist".
+_ROUTE_FAILURES = {-1, 400, 403, 404, 405}
+
+def write_call(path, payload):
+    """Write operation: encrypted weapi first, then the old plain /api/ route as fallback.
+
+    On total failure returns {"code", "weapi", "legacy", "hint"} for the caller to report.
+    """
+    primary = netease_weapi(path, payload)
+    if primary.get('code') == 200:
+        return primary
+    # A transport failure does not prove the write failed. Retrying through another
+    # route could create the same playlist twice.
+    if primary.get('code') == -1:
+        return dict(primary, hint="Write outcome unknown; check the playlist before retrying")
+    if primary.get('code') not in _ROUTE_FAILURES:
+        return _with_hint(primary)
+    logger.warning(f"weapi {path} failed (code {primary.get('code')}), trying legacy route")
+    csrf = get_csrf()
+    legacy = netease_request(f'/api{path}?csrf_token={csrf}', dict(payload, csrf_token=csrf))
+    if legacy.get('code') == 200:
+        return legacy
+    return {"code": primary.get('code'), "weapi": primary, "legacy": legacy, "hint": _hint(primary, legacy)}
+
+def read_call(path, payload=None, legacy_get=None):
+    """Read operation: weapi first; optionally fall back to a plain GET of the old route."""
+    primary = netease_weapi(path, payload)
+    if primary.get('code') == 200:
+        return primary
+    if legacy_get and primary.get('code') in _ROUTE_FAILURES:
+        logger.warning(f"weapi {path} failed (code {primary.get('code')}), trying legacy route")
+        legacy = netease_request(legacy_get, method='GET')
+        if legacy.get('code') == 200:
+            return legacy
+        return {"code": primary.get('code'), "weapi": primary, "legacy": legacy, "hint": _hint(primary, legacy)}
+    return _with_hint(primary)
+
+_UID_CACHE = {}
+
+def get_uid():
+    """Logged-in user id: NETEASE_UID if set, else looked up once and cached."""
+    if NETEASE_UID:
+        return NETEASE_UID
+    if _UID_CACHE.get('uid'):
+        return _UID_CACHE['uid']
+    attempts = (
+        lambda: netease_weapi('/nuser/account/get', {}),
+        lambda: netease_weapi('/w/nuser/account/get', {}),
+        lambda: netease_request('/api/w/nuser/account/get', method='GET'),
+    )
+    for attempt in attempts:
+        r = attempt()
+        if r.get('code') == 200:
+            uid = (r.get('account') or {}).get('id') or (r.get('profile') or {}).get('userId')
+            if uid:
+                _UID_CACHE['uid'] = str(uid)
+                return _UID_CACHE['uid']
+    return None
+
+def _fmt_time(value):
+    """Epoch seconds or milliseconds -> 'YYYY-MM-DD HH:MM UTC+8' ('?' if missing)."""
+    try:
+        ts = float(value)
+    except (TypeError, ValueError):
+        return '?'
+    if ts <= 0:
+        return '?'
+    if ts > 1e11:  # milliseconds
+        ts /= 1000
+    label = 'UTC' if TZ_OFFSET_HOURS == 0 else f'UTC{TZ_OFFSET_HOURS:+g}'
+    return time.strftime('%Y-%m-%d %H:%M', time.gmtime(ts + TZ_OFFSET_HOURS * 3600)) + ' ' + label
 
 # --- Tool Implementations ---
 
@@ -196,36 +385,49 @@ def play_music(params):
 def get_play_history(params):
     """Get play history (weekly or all-time)."""
     all_time = str(params.get('all_time', 'false')).lower() == 'true'
-    limit = int(params.get('limit', 30))
-    rec_type = 0 if all_time else 1
-    result = netease_request(f'/api/v1/play/record?type={rec_type}&limit={limit}', method='GET')
-    if not result or result.get('code') != 200:
-        return {"error": "Failed to get play history", "detail": result}
+    limit = max(1, int(params.get('limit', 30)))
+    uid = get_uid()
+    if not uid:
+        return {"error": "Cannot determine user ID (MUSIC_U missing or expired?)"}
+    # This endpoint needs the uid and is served over weapi only (a plain GET answers 400);
+    # it has no limit parameter, so `limit` is applied locally.
+    result = netease_weapi('/v1/play/record', {'uid': uid, 'type': 0 if all_time else 1})
+    if result.get('code') != 200:
+        return {"error": "Failed to get play history", "detail": _with_hint(result)}
     key = 'allData' if all_time else 'weekData'
-    records = result.get(key, [])[:limit]
+    records = (result.get(key) or [])[:limit]
     output = []
     for i, r in enumerate(records, 1):
-        song = r.get('song', {})
-        artists = ', '.join(a['name'] for a in song.get('ar', []))
+        song = r.get('song') or {}
+        artists = ', '.join(a.get('name', '?') for a in song.get('ar') or [])
         score = r.get('score', 0)
         output.append(f"{i}. {song.get('name', '?')} - {artists} (plays: {score}, ID:{song.get('id')})")
     return {"history": output}
 
 def get_recent_plays(params):
     """Get actual recent play events with timestamps."""
-    limit = min(int(params.get('limit', 100)), 300)
-    result = netease_request(f'/api/play-record/song/list?limit={limit}', method='GET')
-    if not result or result.get('code') != 200:
+    limit = max(1, min(int(params.get('limit', 100)), 300))
+    # `limit` must be in the (encrypted) request body; in the URL the server ignores it
+    # and returns its default page, so the result is also trimmed locally.
+    result = read_call('/play-record/song/list', {'limit': limit},
+                       legacy_get=f'/api/play-record/song/list?limit={limit}')
+    if result.get('code') != 200:
         return {"error": "Failed to get recent plays", "detail": result}
-    records = result.get('data', {}).get('list', [])
+    records = ((result.get('data') or {}).get('list') or [])[:limit]
     output = []
+    without_time = 0
     for i, r in enumerate(records, 1):
-        song = r.get('data', {})
-        artists = ', '.join(a['name'] for a in song.get('ar', []))
-        play_time = r.get('time', 0)
-        time_str = time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(play_time / 1000)) if play_time else '?'
-        output.append(f"{i}. {song.get('name', '?')} - {artists} (ID:{song.get('id')}) [{time_str}]")
-    return {"recent_plays": output}
+        song = r.get('data') or {}
+        artists = ', '.join(a.get('name', '?') for a in song.get('ar') or [])
+        play_time = next((r[k] for k in ('playTime', 'time', 'updateTime', 'lastPlayTime') if r.get(k)), None)
+        if play_time is None:
+            without_time += 1
+        output.append(f"{i}. {song.get('name', '?')} - {artists} (ID:{song.get('id')}) [{_fmt_time(play_time)}]")
+    out = {"recent_plays": output}
+    if records and without_time == len(records):
+        # None of the known timestamp fields exist: report the real field names so it can be fixed
+        out["debug_record_keys"] = sorted(records[0].keys())
+    return out
 
 def daily_recommend(params):
     """Get daily personalized recommendations."""
@@ -279,26 +481,19 @@ def create_playlist(params):
     name = params.get('name', 'New Playlist')
     privacy = params.get('privacy', 0)
     desc = params.get('description', '')
-    csrf = get_csrf()
-    # Primary: encrypted weapi channel (plain /api/playlist/create returns 403 since ~Oct 2026)
-    result = netease_weapi('/playlist/create', {'name': name, 'privacy': str(privacy), 'type': 'NORMAL'})
-    if not result or result.get('code') != 200:
-        logger.warning(f"weapi create failed, falling back to legacy api: {result}")
-        data = {'name': name, 'privacy': privacy, 'type': 'NORMAL', 'csrf_token': csrf}
-        legacy = netease_request(f'/api/playlist/create?csrf_token={csrf}', data)
-        if not legacy or legacy.get('code') != 200:
-            return {"error": "Failed to create playlist", "detail": {"weapi": result, "legacy": legacy}}
-        result = legacy
-    pid = result.get('id') or result.get('playlist', {}).get('id')
+    # weapi first (the plain /api/ route is refused since ~Oct 2026), legacy route as fallback
+    result = write_call('/playlist/create', {'name': name, 'privacy': str(privacy), 'type': 'NORMAL'})
+    if result.get('code') != 200:
+        return {"error": "Failed to create playlist", "detail": result}
+    pid = result.get('id') or (result.get('playlist') or {}).get('id')
     # Set description if provided
     desc_status = ""
     if desc and pid:
-        desc_data = {'id': pid, 'desc': desc, 'csrf_token': csrf}
-        desc_result = netease_request(f'/api/playlist/desc/update?csrf_token={csrf}', desc_data)
-        if desc_result and desc_result.get('code') == 200:
-            desc_status = f" | Description: set"
+        desc_result = write_call('/playlist/desc/update', {'id': str(pid), 'desc': desc})
+        if desc_result.get('code') == 200:
+            desc_status = " | Description: set"
         else:
-            desc_status = f" | Description: failed"
+            desc_status = f" | Description: failed (code {desc_result.get('code')})"
     return {"playlist_id": pid, "name": name, "status": f"created{desc_status}"}
 
 def add_to_playlist(params):
@@ -307,11 +502,12 @@ def add_to_playlist(params):
     song_ids = params.get('song_ids', '')
     if not pid or not song_ids:
         return {"error": "playlist_id and song_ids required"}
-    csrf = get_csrf()
-    ids = [s.strip() for s in str(song_ids).split(',')]
-    data = {'pid': pid, 'trackIds': json.dumps(ids), 'op': 'add', 'csrf_token': csrf}
-    result = netease_request(f'/api/playlist/manipulate/tracks?csrf_token={csrf}', data)
-    if not result or result.get('code') != 200:
+    ids = [s.strip() for s in str(song_ids).split(',') if s.strip()]
+    if not ids:
+        return {"error": "song_ids is empty"}
+    result = write_call('/playlist/manipulate/tracks',
+                        {'pid': str(pid), 'trackIds': json.dumps(ids), 'op': 'add', 'imme': 'true'})
+    if result.get('code') != 200:
         return {"error": "Failed to add songs", "detail": result}
     return {"status": f"Added {len(ids)} song(s) to playlist {pid}"}
 
@@ -321,11 +517,12 @@ def remove_from_playlist(params):
     song_ids = params.get('song_ids', '')
     if not pid or not song_ids:
         return {"error": "playlist_id and song_ids required"}
-    csrf = get_csrf()
-    ids = [s.strip() for s in str(song_ids).split(',')]
-    data = {'pid': pid, 'trackIds': json.dumps(ids), 'op': 'del', 'csrf_token': csrf}
-    result = netease_request(f'/api/playlist/manipulate/tracks?csrf_token={csrf}', data)
-    if not result or result.get('code') != 200:
+    ids = [s.strip() for s in str(song_ids).split(',') if s.strip()]
+    if not ids:
+        return {"error": "song_ids is empty"}
+    result = write_call('/playlist/manipulate/tracks',
+                        {'pid': str(pid), 'trackIds': json.dumps(ids), 'op': 'del', 'imme': 'true'})
+    if result.get('code') != 200:
         return {"error": "Failed to remove songs", "detail": result}
     return {"status": f"Removed {len(ids)} song(s) from playlist {pid}"}
 
@@ -348,10 +545,8 @@ def update_playlist_description(params):
     desc = params.get('description', '')
     if not pid:
         return {"error": "playlist_id required"}
-    csrf = get_csrf()
-    data = {'id': pid, 'desc': desc, 'csrf_token': csrf}
-    result = netease_request(f'/api/playlist/desc/update?csrf_token={csrf}', data)
-    if not result or result.get('code') != 200:
+    result = write_call('/playlist/desc/update', {'id': str(pid), 'desc': desc})
+    if result.get('code') != 200:
         return {"error": "Failed to update description", "detail": result}
     return {"status": f"Updated description for playlist {pid}"}
 
@@ -361,8 +556,7 @@ def reorder_playlist_tracks(params):
     song_ids = params.get('song_ids', '')
     if not pid or not song_ids:
         return {"error": "playlist_id and song_ids required"}
-    csrf = get_csrf()
-    ids = [int(s.strip()) for s in str(song_ids).split(',')]
+    ids = [int(s.strip()) for s in str(song_ids).split(',') if s.strip()]
     # Get current order
     detail = netease_request(f'/api/v6/playlist/detail?id={pid}', method='GET')
     if not detail or detail.get('code') != 200:
@@ -370,9 +564,9 @@ def reorder_playlist_tracks(params):
     current_ids = [t['id'] for t in detail.get('playlist', {}).get('tracks', [])]
     if current_ids == ids:
         return {"status": "Playlist is already in the requested order."}
-    data = {'pid': pid, 'trackIds': json.dumps(ids), 'op': 'update', 'csrf_token': csrf}
-    result = netease_request(f'/api/playlist/manipulate/tracks?csrf_token={csrf}', data)
-    if not result or result.get('code') != 200:
+    result = write_call('/playlist/manipulate/tracks',
+                        {'pid': str(pid), 'trackIds': json.dumps(ids), 'op': 'update', 'imme': 'true'})
+    if result.get('code') != 200:
         return {"error": "Failed to reorder", "detail": result}
     return {"status": f"Reordered {len(ids)} tracks in playlist {pid}"}
 
@@ -434,15 +628,17 @@ def get_artist_hot_songs(params):
 
 def get_personal_fm(params):
     """Get personal FM recommendations."""
-    result = netease_request('/api/v1/radio/get', method='GET')
-    if not result or result.get('code') != 200:
+    result = read_call('/v1/radio/get', {}, legacy_get='/api/v1/radio/get')
+    if result.get('code') != 200:
         return {"error": "Failed to get personal FM", "detail": result}
-    songs = result.get('data', [])
-    output = []
-    for i, s in enumerate(songs, 1):
-        artists = ', '.join(a['name'] for a in s.get('artists', []))
-        album = s.get('album', {}).get('name', '?')
-        output.append(f"{i}. {s['name']} - {artists} | Album: {album} (ID:{s['id']})")
+    output, seen = [], set()
+    for s in result.get('data') or []:
+        if s.get('id') in seen:  # the endpoint can repeat a track within one batch
+            continue
+        seen.add(s.get('id'))
+        artists = ', '.join(a.get('name', '?') for a in s.get('artists') or s.get('ar') or [])
+        album = (s.get('album') or s.get('al') or {}).get('name', '?')
+        output.append(f"{len(output) + 1}. {s.get('name', '?')} - {artists} | Album: {album} (ID:{s.get('id')})")
     return {"personal_fm": output}
 
 def get_liked_songs(params):
@@ -542,7 +738,7 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
     def do_GET(self):
         if self.path == '/health':
-            self._json_response({"status": "ok", "tools": len(TOOLS), "version": "3.2.0"})
+            self._json_response({"status": "ok", "tools": len(TOOLS), "version": VERSION})
         elif self.path == '/sse':
             self._handle_sse()
         else:
@@ -560,7 +756,7 @@ class MCPHandler(http.server.BaseHTTPRequestHandler):
             return
         if method == 'initialize':
             result = {"protocolVersion": "2025-03-26", "capabilities": {"tools": {"listChanged": False}},
-                      "serverInfo": {"name": "netease-music-mcp", "version": "3.2.0"}}
+                      "serverInfo": {"name": "netease-music-mcp", "version": VERSION}}
         elif method == 'tools/list':
             result = {"tools": TOOLS}
         elif method == 'tools/call':
@@ -618,8 +814,18 @@ class ThreadedHTTPServer(HTTPServer):
         finally:
             self.shutdown_request(request)
 
+def _startup_checks():
+    """Log which credentials were found (key names only, never values)."""
+    jar = _parse_cookie(NETEASE_COOKIE)
+    logger.info("Cookie keys provided: " + (", ".join(sorted(jar)) or "(none)"))
+    if 'MUSIC_U' not in jar:
+        logger.warning("No MUSIC_U in NETEASE_COOKIE: requests are anonymous and account calls will fail")
+    if not get_csrf():
+        logger.warning("No __csrf (in NETEASE_COOKIE or NETEASE_CSRF): write operations will fail with 403")
+
 if __name__ == '__main__':
-    logger.info(f"Starting NetEase Music MCP Server v3.2.0 with {len(TOOLS)} tools on port {PORT}")
+    logger.info(f"Starting NetEase Music MCP Server v{VERSION} with {len(TOOLS)} tools on port {PORT}")
+    _startup_checks()
     server = ThreadedHTTPServer(('0.0.0.0', PORT), MCPHandler)
     try:
         server.serve_forever()

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.1] - 2026-10-12
+
+### Fixed
+- `create_playlist` / `update_playlist_description`: requests now fill missing device cookies and send `__csrf` as a cookie as well as `csrf_token`. This addresses incomplete request credentials; recovery from the reported 403 still needs a live authenticated test.
+- `get_play_history` returned HTTP 400: the endpoint needs the user id and the encrypted weapi channel.
+- `get_recent_plays` ignored `limit` (always returned 300) and showed `?` for every timestamp: `limit` now goes in the encrypted body and is also applied locally, the play-time field is looked up under several names, and the real field names are returned if none match.
+- `get_personal_fm` could list the same track twice; results are now de-duplicated.
+
+### Changed
+- Write tools (create, add, remove, reorder, description) use weapi first and fall back to the plain route only for gateway-type failures (400/403/404/405).
+- Writes do not fall back after transport errors, because their outcome may be unknown. Error logs omit query strings and upstream response bodies to protect credentials.
+- Errors keep NetEase's own response body (including HTTP 4xx) and add a `hint` for 403 / 301 / -460.
+- The server reads `.env` itself (variables already exported take precedence), which fixes `export $(cat .env | xargs)` dropping `__csrf`.
+- New optional settings: `NETEASE_TZ_OFFSET`, `NETEASE_UID`.
+- The startup log lists which cookie keys were found (names only) and warns if `MUSIC_U` or `__csrf` is missing.
+
 ## [3.2.0] - 2026-10-08
 
 ### Fixed

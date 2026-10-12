@@ -119,9 +119,11 @@ cd netease-music-mcp
 ```
 打开 music.163.com，登录你的账号。
 
-F12 → Application → Cookies → music.163.com：
-- 复制 `MUSIC_U` 的值
-- 复制 `__csrf` 的值
+F12 → Network（网络）→ 刷新页面 → 点任意一个 music.163.com 的请求，
+在 Request Headers 里复制 `Cookie:` 后面的整串内容（推荐）
+
+只想最小配置的话，也可以在 Application → Cookies → music.163.com 里
+只复制 `MUSIC_U` 和 `__csrf`，但创建/修改歌单时更容易被网易云拒绝（403 illegal request）
 ```
 
 ### 3. 配置环境变量
@@ -130,30 +132,37 @@ F12 → Application → Cookies → music.163.com：
 cp .env.example .env
 ```
 
-编辑 `.env`：
+编辑 `.env`（整串 Cookie 直接粘贴，不用加引号）：
 
 ```
-NETEASE_COOKIE=MUSIC_U=你的值; __csrf=你的值
+NETEASE_COOKIE=粘贴整串Cookie
 MCP_PORT=3456
 ```
 
-或者分开设（推荐，避免 csrf 提取失败）：
+最小配置的写法：
+
+```
+NETEASE_COOKIE=MUSIC_U=你的值; __csrf=你的值
+```
+
+也可以把 csrf 单独设（服务会自动把它补进 Cookie）：
 
 ```
 NETEASE_COOKIE=MUSIC_U=你的值
 NETEASE_CSRF=你的csrf值
-MCP_PORT=3456
 ```
+
+其他可选项：`NETEASE_TZ_OFFSET`（工具输出里时间戳的时区，北京时间填 `8`，默认 UTC）、`NETEASE_UID`（一般不用填，会自动获取）。
 
 ### 4. 启动
 
 ```bash
-export $(cat .env | xargs)
-cd server/mcp-server
-python3 server.py
+python3 server/mcp-server/server.py
 ```
 
-看到 `Starting NetEase Music MCP Server v3.1.0 with 18 tools` 就好了。
+服务会自己读取项目根目录的 `.env`。不要再用 `export $(cat .env | xargs)`：Cookie 里有空格和分号，会被拆开，`__csrf` 就丢了。已经在 shell 里 export 过的同名变量优先于 `.env`。
+
+看到 `Starting NetEase Music MCP Server v3.2.1 with 18 tools`，并且日志里 `Cookie keys provided` 一行包含 `MUSIC_U` 和 `__csrf`，就好了。
 
 ### 5. 连接你的 MCP 客户端
 
@@ -193,6 +202,7 @@ curl http://localhost:3456/health
 
 - `like_song` 在服务器 IP 与你常用 IP 差异较大时可能触发网易云风控
 - `__csrf` 会过期，如果 POST 操作失败，重新从浏览器抓一下
+- 创建/修改歌单返回 `403 illegal request`：把浏览器里整串 Cookie 贴进 `NETEASE_COOKIE`（见上面第 2 步），只放 `MUSIC_U` 容易被拒绝
 - `MUSIC_U` 一般能撑几个月
 - 如果想要原版的网页播放器 ，请参考[原仓库](https://github.com/Cheiineeey/netease-music-mcp)的 `frontend/` 目录
 - 兼容：橘瓣 / Cherry Studio / 支持 Streamable HTTP 的 MCP 客户端
