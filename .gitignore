@@ -1,7 +1,22 @@
-node_modules/
+# Secrets and local state - never commit
 .env
-music.db
-*.pyc
+.env.*
+!.env.example
+
+# Python
 __pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Runtime
 *.log
 nohup.out
+music.db
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>网易云音乐 · 音乐控制台</title>
+<style>
+/* ==========================================================================
+   网易云音乐原版视觉语言
+   - 标志性红色顶栏 #C20C0C + 红色小圆点 logo
+   - 顶栏下方深色子导航条（原版 #C20C0C 上的深色/白字条）
+   - 内容区浅灰底 #F5F5F5，卡片纯白 + 细边框 #D3D3D3
+   - 红色圆形播放按钮、红色链接、灰色次要文字 #666/#999
+   - 中文「微软雅黑 / PingFang」字族，12~14px 正文
+   ========================================================================== */
+:root{
+  --red:#C20C0C;          /* 网易云标志红 */
+  --red-dark:#A00A0A;
+  --red-light:#D33A3A;
+  --bar:#C20C0C;
+  --sub:#C20C0C;
+  --item-hover:#F2F2F2;
+  --item-active:#E6E6E6;
+  --bg:#F5F5F5;           /* 内容区底色 */
+  --card:#FFFFFF;
+  --line:#D3D3D3;         /* 卡片描边 */
+  --line-soft:#E8E8E8;
+  --fg:#333333;
+  --fg2:#666666;
+  --fg3:#999999;
+  --fg4:#BBBBBB;
+  --link:#0C73C2;         /* 原版链接蓝 */
+  --gold:#C20C0C;
+  --radius:4px;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font:12px/1.6 Arial,"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ===================== 顶部红色主栏 ===================== */
+.topbar{
+  height:70px;background:var(--bar);color:#fff;
+  display:flex;align-items:center;gap:0;padding:0 0 0 0;
+  border-bottom:1px solid #A00A0A;
+}
+.topbar .logo{
+  display:flex;align-items:center;gap:9px;
+  padding:0 26px 0 22px;height:70px;
+  font-size:20px;font-weight:400;letter-spacing:.5px;color:#fff;
+  text-decoration:none;white-space:nowrap;
+}
+.topbar .logo .disc{
+  width:34px;height:34px;border-radius:50%;flex:none;
+  background:radial-gradient(circle at 50% 50%, #fff 0 22%, var(--bar) 23% 100%),
+             conic-gradient(from 0deg,#fff,#ffd9d9,#fff,#ffd9d9,#fff);
+  border:2px solid #fff;
+}
+.topbar .logo b{font-weight:700}
+.topbar .logo small{font-size:11px;opacity:.72;font-weight:400}
+
+/* 原版顶部主菜单 */
+.topnav{display:flex;height:70px}
+.topnav a{
+  display:flex;align-items:center;padding:0 19px;height:70px;
+  color:#fff;text-decoration:none;font-size:14px;position:relative;
+  opacity:.82;
+}
+.topnav a:hover{opacity:1;background:#A00A0A}
+.topnav a.on{opacity:1;background:#9B0909}
+.topnav a.on::after{
+  content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+  border-left:6px solid transparent;border-right:6px solid transparent;
+  border-bottom:6px solid var(--bg);
+}
+.topbar .right{margin-left:auto;display:flex;align-items:center;gap:14px;padding-right:22px}
+.searchbox{display:flex;align-items:center;background:#fff;border-radius:16px;height:32px;padding:0 12px;width:230px}
+.searchbox input{
+  border:0;outline:none;background:transparent;font-size:12px;
+  width:100%;color:#333;font-family:inherit;
+}
+.searchbox .mag{color:#C9C9C9;margin-right:7px;font-size:13px}
+.kbd-tip{font-size:11px;color:rgba(255,255,255,.7)}
+
+/* ===================== 顶部状态条（登录态） ===================== */
+.statusbar{
+  height:34px;background:#F5F5F5;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:14px;padding:0 22px;font-size:12px;color:var(--fg2);
+}
+.dotled{width:8px;height:8px;border-radius:50%;background:#bbb;flex:none;display:inline-block;margin-right:6px}
+.dotled.on{background:#2E9E48}
+.dotled.off{background:#C20C0C}
+.statusbar .conn{display:flex;align-items:center;cursor:pointer}
+.statusbar .sp{flex:1}
+.statusbar button{
+  border:1px solid var(--line);background:#fff;color:var(--fg2);
+  border-radius:3px;padding:2px 10px;cursor:pointer;font-size:11px;font-family:inherit;
+}
+.statusbar button:hover{border-color:var(--red);color:var(--red)}
+
+/* ===================== 主体骨架 ===================== */
+.shell{display:flex;align-items:flex-start;max-width:1180px;margin:0 auto;background:var(--card);border-left:1px solid var(--line);border-right:1px solid var(--line);min-height:calc(100vh - 104px)}
+.side{
+  width:190px;flex:none;border-right:1px solid var(--line);
+  padding:18px 0 40px;background:var(--card);
+}
+.side h4{
+  margin:16px 0 6px;padding:0 20px;font-size:12px;color:var(--fg3);
+  font-weight:400;letter-spacing:.4px;
+}
+.side h4:first-child{margin-top:0}
+.side .nav{display:flex;flex-direction:column}
+.side .nav a{
+  display:flex;align-items:center;gap:8px;padding:7px 20px 7px 26px;
+  color:var(--fg);text-decoration:none;font-size:13px;cursor:pointer;
+  border-left:3px solid transparent;
+}
+.side .nav a:hover{background:var(--item-hover)}
+.side .nav a.on{background:var(--item-active);border-left-color:var(--red);color:var(--red);font-weight:700}
+.side .nav .ic{width:15px;text-align:center;flex:none;font-size:13px;opacity:.85}
+
+.main{flex:1;min-width:0;padding:22px 28px 60px}
+
+/* ===================== 通用块 ===================== */
+.pg-head{display:flex;align-items:flex-end;gap:10px;border-bottom:2px solid var(--red);padding-bottom:8px;margin-bottom:20px}
+.pg-head h2{margin:0;font-size:20px;font-weight:400;color:var(--fg)}
+.pg-head .sub{color:var(--fg3);font-size:12px;padding-bottom:3px}
+.pg-head .act{margin-left:auto;display:flex;gap:8px;padding-bottom:3px}
+
+.btn{
+  border:1px solid var(--line);background:linear-gradient(#FEFEFE,#F4F4F4);
+  color:var(--fg);border-radius:3px;padding:5px 14px;cursor:pointer;
+  font-size:12px;font-family:inherit;white-space:nowrap;
+}
+.btn:hover{border-color:#B3B3B3;background:linear-gradient(#fff,#EDEDED)}
+.btn.primary{
+  background:linear-gradient(var(--red-light),var(--red));border-color:var(--red-dark);
+  color:#fff;
+}
+.btn.primary:hover{background:linear-gradient(#E04A4A,var(--red-dark))}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ===================== 歌曲列表（原版表格样式） ===================== */
+.stable{width:100%;border-collapse:collapse;border:1px solid var(--line);background:#fff}
+.stable thead th{
+  background:linear-gradient(#FCFCFC,#F0F0F0);border-bottom:1px solid var(--line);
+  color:var(--fg2);font-weight:400;font-size:12px;text-align:left;
+  padding:7px 10px;
+}
+.stable tbody tr{border-bottom:1px solid var(--line-soft)}
+.stable tbody tr:nth-child(even){background:#FCFCFC}
+.stable tbody tr:hover{background:#F0F0F0}
+.stable td{padding:7px 10px;font-size:12px;vertical-align:middle}
+.stable .c-no{width:42px;color:var(--fg3);text-align:right;font-variant-numeric:tabular-nums}
+.stable .c-op{width:132px;text-align:right}
+.stable .c-op button{
+  border:1px solid var(--line);background:#fff;border-radius:2px;
+  padding:1px 7px;font-size:11px;cursor:pointer;color:var(--fg2);font-family:inherit;
+  margin-left:4px;
+}
+.stable .c-op button:hover{border-color:var(--red);color:var(--red)}
+.stable .ttl{color:var(--fg)}
+.stable .ttl .play{
+  display:inline-block;width:14px;height:14px;border-radius:50%;
+  background:var(--red);color:#fff;font-size:9px;line-height:14px;text-align:center;
+  margin-right:6px;cursor:pointer;vertical-align:1px;
+}
+.stable .ttl .play:hover{background:var(--red-dark)}
+.stable .ar{color:var(--fg2)}
+.stable .ar a{color:var(--fg2);text-decoration:none}
+.stable .ar a:hover{color:var(--red);text-decoration:underline}
+.stable .dur{color:var(--fg3);width:56px;text-align:right;font-variant-numeric:tabular-nums}
+.stable .alb{color:var(--fg3);width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stable .hr{color:var(--fg3);width:44px;text-align:center}
+.stable .hr b{color:var(--red);cursor:pointer;font-size:13px}
+.stable .hr b.off{color:#DDD;cursor:pointer}
+
+/* ===================== 歌单卡片网格（原版封面墙） ===================== */
+.covers{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:22px 18px}
+.cov{cursor:pointer;display:flex;flex-direction:column;gap:7px}
+.cov .art{
+  position:relative;width:100%;aspect-ratio:1/1;border:1px solid var(--line);
+  background:linear-gradient(135deg,#EDEDED,#DCDCDC);border-radius:3px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+}
+.cov .art .ph{font-size:30px;color:#C6C6C6}
+.cov .art .bar{
+  position:absolute;left:0;right:0;bottom:0;height:26px;
+  background:rgba(0,0,0,.55);color:#fff;font-size:11px;
+  display:flex;align-items:center;justify-content:space-between;padding:0 8px;
+  opacity:0;transition:opacity .15s;
+}
+.cov:hover .art .bar{opacity:1}
+.cov .art .bar .pl{display:flex;align-items:center;gap:4px}
+.cov .nm{font-size:13px;color:var(--fg);line-height:1.45;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cov:hover .nm{color:var(--red)}
+.cov .meta{font-size:11px;color:var(--fg3);display:flex;align-items:center;gap:6px}
+.badge{
+  display:inline-block;font-size:10px;line-height:14px;padding:0 5px;border-radius:2px;
+  border:1px solid var(--line);color:var(--fg3);background:#FAFAFA;
+}
+.badge.mine{border-color:#E9B7B7;color:var(--red);background:#FDF4F4}
+
+/* ===================== 卡片 / 提示 ===================== */
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:16px}
+.tip{border:1px solid #F0D9A8;background:#FFFBF0;color:#8A6D1F;border-radius:3px;padding:9px 13px;font-size:12px;margin-bottom:14px}
+.err{border:1px solid #E5B4B4;background:#FFF5F5;color:#A00A0A;border-radius:3px;padding:11px 14px;font-size:12px;margin-bottom:14px}
+.empty{color:var(--fg3);text-align:center;padding:50px 20px;font-size:13px}
+.spin{width:14px;height:14px;border:2px solid #DDD;border-top-color:var(--red);border-radius:50%;
+      animation:sp .7s linear infinite;display:inline-block;vertical-align:-2px;margin-right:7px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ===================== 歌词 ===================== */
+.lyrics{white-space:pre-wrap;font-size:13px;line-height:2.05;color:#444}
+.lyrics .tr{color:#999;font-size:12px}
+
+/* ===================== 表单 ===================== */
+.field{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.field label{font-size:12px;color:var(--fg2);min-width:56px}
+.field input,.field select{
+  padding:5px 9px;border:1px solid var(--line);border-radius:3px;background:#fff;
+  color:var(--fg);outline:none;font-size:12px;font-family:inherit;
+}
+.field input:focus,.field select:focus{border-color:var(--red)}
+.field input[type=text],.field input:not([type]){flex:1;min-width:200px}
+pre.raw{
+  background:#FAFAFA;border:1px solid var(--line);border-radius:3px;padding:12px;
+  overflow:auto;font-size:11.5px;line-height:1.65;color:#444;margin:0;max-height:460px;
+  font-family:Consolas,Menlo,monospace;
+}
+.back{
+  background:none;border:0;color:var(--link);cursor:pointer;font-size:12px;
+  padding:0;margin-bottom:12px;font-family:inherit;
+}
+.back:hover{text-decoration:underline}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+#toast{
+  position:fixed;left:50%;bottom:40px;transform:translateX(-50%);
+  background:rgba(0,0,0,.82);color:#fff;padding:9px 18px;border-radius:3px;
+  font-size:12px;z-index:99;
+}
+.hero{
+  display:flex;gap:18px;align-items:center;margin-bottom:18px;
+  background:linear-gradient(180deg,#FAFAFA,#F1F1F1);border:1px solid var(--line);
+  border-radius:3px;padding:16px 18px;
+}
+.hero .cov{width:88px;height:88px;border-radius:3px;border:1px solid var(--line);
+  background:linear-gradient(135deg,#E6E6E6,#D2D2D2);display:flex;align-items:center;justify-content:center;
+  font-size:32px;color:#B9B9B9;flex:none}
+.hero .info{min-width:0;flex:1}
+.hero .info h3{margin:0 0 6px;font-size:17px;font-weight:400}
+.hero .info .meta{color:var(--fg3);font-size:12px;line-height:1.9}
+
+/* ===================== 播放 ===================== */
+/* 行内「播放」按钮：原版列表里的红色三角 */
+.stable .ttl .play{cursor:pointer}
+.stable .ttl .play:hover{background:var(--red-dark)}
+.stable .c-op button.playbtn{border-color:var(--red);color:var(--red)}
+.stable .c-op button.playbtn:hover{background:var(--red);color:#fff}
+
+/* 悬浮播放菜单：选「网页播放器」还是「本地客户端」 */
+.pmenu{
+  position:fixed;z-index:120;min-width:212px;background:#fff;
+  border:1px solid #C9C9C9;border-radius:3px;box-shadow:0 4px 16px rgba(0,0,0,.18);
+  padding:5px 0;font-size:12px;
+}
+.pmenu .hd{
+  padding:7px 12px 6px;color:var(--fg3);font-size:11px;
+  border-bottom:1px solid var(--line-soft);margin-bottom:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.pmenu .hd b{color:var(--fg);font-weight:400}
+.pmenu a{
+  display:flex;align-items:center;gap:9px;padding:8px 12px;
+  color:var(--fg);cursor:pointer;text-decoration:none;
+}
+.pmenu a:hover{background:#F2F2F2;text-decoration:none}
+.pmenu a .ic{width:16px;text-align:center;font-size:13px;flex:none}
+.pmenu a .tx{min-width:0}
+.pmenu a .tx .t1{display:block;line-height:1.4}
+.pmenu a .tx .t2{display:block;color:var(--fg3);font-size:11px;line-height:1.4}
+.pmenu a.disabled{opacity:.45;cursor:default}
+.pmenu a.disabled:hover{background:none}
+.pmenu .sep{height:1px;background:var(--line-soft);margin:4px 0}
+
+/* 底部正在播放条 */
+.playbar{
+  position:fixed;left:0;right:0;bottom:0;height:54px;z-index:90;
+  background:#2B2B2B;border-top:1px solid #000;color:#E6E6E6;
+  display:flex;align-items:center;gap:14px;padding:0 20px;
+  box-shadow:0 -2px 10px rgba(0,0,0,.3);
+}
+.playbar .disc{
+  width:34px;height:34px;border-radius:50%;flex:none;
+  background:radial-gradient(circle at 50% 50%, #555 0 18%, #1A1A1A 19% 100%);
+  border:1px solid #111;position:relative;
+}
+.playbar .disc::after{
+  content:"";position:absolute;inset:44%;border-radius:50%;background:var(--red);
+}
+.playbar.spinning .disc{animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.playbar .np{min-width:0;flex:1}
+.playbar .np .t1{font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.playbar .np .t2{font-size:11px;color:#9A9A9A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.playbar .ops{display:flex;align-items:center;gap:8px;flex:none}
+.playbar .ops a,.playbar .ops button{
+  border:1px solid #4A4A4A;background:#383838;color:#E6E6E6;
+  border-radius:3px;padding:4px 11px;font-size:11px;cursor:pointer;
+  font-family:inherit;text-decoration:none;white-space:nowrap;
+}
+.playbar .ops a:hover,.playbar .ops button:hover{background:var(--red);border-color:var(--red);color:#fff;text-decoration:none}
+.playbar .ops .x{border-color:transparent;background:transparent;color:#8A8A8A;padding:4px 7px;font-size:13px}
+.playbar .ops .x:hover{background:transparent;color:#fff;border-color:transparent}
+body.hasbar{padding-bottom:70px}
+
+/* 连播队列抽屉 */
+.qdrawer{
+  position:fixed;right:0;bottom:54px;width:330px;max-height:56vh;z-index:95;
+  background:#fff;border:1px solid var(--line);border-bottom:0;border-radius:4px 4px 0 0;
+  box-shadow:-2px -2px 14px rgba(0,0,0,.16);display:flex;flex-direction:column;
+}
+.qdrawer .qh{
+  display:flex;align-items:center;gap:8px;padding:9px 12px;
+  border-bottom:1px solid var(--line);background:#FAFAFA;border-radius:4px 4px 0 0;
+}
+.qdrawer .qh .t{font-size:12px;color:var(--fg);flex:1}
+.qdrawer .qh .t b{color:var(--red);font-weight:400}
+.qdrawer .qh button{border:0;background:none;color:var(--fg3);cursor:pointer;font-size:13px;padding:2px 5px}
+.qdrawer .qh button:hover{color:var(--red)}
+.qdrawer .ql{overflow-y:auto;flex:1}
+.qdrawer .qi{
+  display:flex;align-items:center;gap:8px;padding:7px 12px;
+  border-bottom:1px solid var(--line-soft);font-size:12px;cursor:pointer;
+}
+.qdrawer .qi:hover{background:#F5F5F5}
+.qdrawer .qi.on{background:#FDF0F0}
+.qdrawer .qi.on .n{color:var(--red)}
+.qdrawer .qi .i{width:20px;color:var(--fg3);text-align:right;flex:none;font-variant-numeric:tabular-nums}
+.qdrawer .qi .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qdrawer .qi .a{color:var(--fg3);font-size:11px;max-width:104px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+.playbar .ops .mode{min-width:52px}
+
+/* ===================== AI 用户侧写（精简版） ===================== */
+.pf-wrap{max-width:760px}
+.pf-range{display:flex;gap:0;margin-bottom:20px;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:#fff}
+.pf-range button{
+  flex:1;border:0;border-right:1px solid var(--line);background:#fff;color:var(--fg2);
+  padding:11px 6px;cursor:pointer;font-size:13px;font-family:inherit;transition:background .12s;
+}
+.pf-range button:last-child{border-right:0}
+.pf-range button:hover{background:#F7F7F7}
+.pf-range button.on{background:var(--red);color:#fff;font-weight:700}
+.pf-range button .rs{display:block;font-size:10.5px;opacity:.75;font-weight:400;margin-top:2px}
+
+/* 主卡：一句判词 */
+/* AI 解读面板 */
+.pf-ai{background:#fff;border:1px solid var(--line);border-radius:5px;padding:16px 18px;margin-bottom:16px}
+.ai-cta{display:flex;align-items:center;gap:14px;justify-content:space-between}
+.ai-cta-t{font-size:14px;font-weight:700;color:var(--fg)}
+.ai-cta-s{font-size:11.5px;color:var(--fg3);margin-top:3px}
+.ai-loading{font-size:13px;color:var(--fg2);padding:14px 0 4px}
+.ai-head{font-size:13px;font-weight:700;color:var(--fg);margin:14px 0 8px;
+  display:flex;align-items:baseline;gap:9px;border-left:3px solid var(--red);padding-left:9px}
+.ai-meta{font-size:11px;font-weight:400;color:var(--fg3)}
+.ai-body{font-size:13.5px;line-height:2;color:#333;background:#FBFCFE;
+  border:1px solid #E6EEF9;border-radius:4px;padding:13px 15px}
+.ai-actions{display:flex;gap:8px;margin-top:11px}
+.ai-off{font-size:13px;color:var(--fg2);padding:12px 0 2px}
+.ai-err{font-size:13px;color:#A00A0A;padding:12px 0 2px}
+.ai-off-hint{font-size:11.5px;color:var(--fg3);margin-top:5px;line-height:1.6}
+.pf-notes-h{font-size:12px;color:var(--fg3);letter-spacing:1px;margin:2px 0 8px}
+.pf-hero{
+  background:linear-gradient(135deg,#C20C0C,#8E0808);color:#fff;border-radius:6px;
+  padding:30px 30px 26px;margin-bottom:18px;position:relative;overflow:hidden;
+}
+.pf-hero::after{
+  content:"";position:absolute;right:-50px;bottom:-70px;width:220px;height:220px;
+  border-radius:50%;background:rgba(255,255,255,.06);
+}
+.pf-hero .lb{font-size:11.5px;opacity:.75;letter-spacing:2px;margin-bottom:12px}
+.pf-hero .verdict{font-size:27px;line-height:1.45;font-weight:700;position:relative;z-index:1}
+.pf-hero .verdict em{font-style:normal;border-bottom:2px solid rgba(255,255,255,.55);padding-bottom:1px}
+.pf-hero .one{font-size:13.5px;opacity:.92;margin-top:14px;line-height:1.8;position:relative;z-index:1}
+
+/* 三张小卡 */
+.pf-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:18px}
+.pf-c{background:#fff;border:1px solid var(--line);border-radius:5px;padding:16px 17px}
+.pf-c .ct{font-size:11.5px;color:var(--fg3);letter-spacing:1px;margin-bottom:11px}
+.pf-c .cv{font-size:19px;color:var(--fg);line-height:1.4;font-weight:700}
+.pf-c .cw{font-size:12px;color:var(--fg3);margin-top:6px;line-height:1.6}
+.pf-c .bar{height:6px;background:#F0F0F0;border-radius:99px;margin-top:11px;overflow:hidden}
+.pf-c .bar i{display:block;height:100%;background:linear-gradient(90deg,#EFA9A9,var(--red));border-radius:99px}
+
+/* 趣味洞察条 */
+.pf-notes{background:#fff;border:1px solid var(--line);border-radius:5px;padding:6px 20px 14px;margin-bottom:16px}
+.pf-note{display:flex;gap:13px;padding:15px 0;border-bottom:1px dashed #EDEDED;align-items:flex-start}
+.pf-note:last-child{border-bottom:0}
+.pf-note .em{font-size:20px;flex:none;line-height:1.3;width:26px;text-align:center}
+.pf-note .bd{min-width:0}
+.pf-note .h{font-size:14px;font-weight:700;color:var(--fg);line-height:1.5;margin-bottom:3px}
+.pf-note .h em{font-style:normal;color:var(--red)}
+.pf-note .p{font-size:12.5px;color:var(--fg2);line-height:1.75}
+
+.pf-note.quote .h{font-weight:400;font-size:13.5px;color:#555;font-style:italic}
+.pf-note.quote{border-left:3px solid var(--red);padding-left:15px;background:#FDFAFA;border-radius:0 3px 3px 0}
+
+/* 时段小条 */
+.pf-hours{display:flex;align-items:flex-end;gap:2px;height:52px;margin-top:12px}
+.pf-hours i{flex:1;background:#E9C4C4;border-radius:1px;min-height:2px}
+.pf-hours i.hot{background:var(--red)}
+.pf-foot{font-size:11.5px;color:var(--fg3);line-height:1.85;margin-top:4px}
+.pf-foot code{background:#F2F2F2;padding:1px 5px;border-radius:2px}
+.pf-tools{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<!-- ============ 红色主栏 ============ -->
+<div class="topbar">
+  <a class="logo" href="#" onclick="goto('daily');return false">
+    <span class="disc"></span><span><b>网易云</b>音乐 <small>控制台 v3.2</small></span>
+  </a>
+  <nav class="topnav" id="topnav">
+    <a data-view="daily" class="on">发现音乐</a>
+    <a data-view="playlists">我的音乐</a>
+    <a data-view="liked">我的收藏</a>
+    <a data-view="history">听歌排行</a>
+    <a data-view="recent">最近播放</a>
+  </nav>
+  <div class="right">
+    <div class="searchbox">
+      <span class="mag">🔍</span>
+      <input id="q" placeholder="搜索音乐、歌手…" autocomplete="off">
+    </div>
+  </div>
+</div>
+
+<!-- ============ 状态条 ============ -->
+<div class="statusbar">
+  <span class="conn" id="conn" title="点击重新检测">
+    <span class="dotled" id="led"></span><span id="connTxt">检测中…</span>
+  </span>
+  <span id="epTxt"></span>
+  <span class="sp"></span>
+  <span class="kbd-tip" style="color:#999">回车搜索 · 点歌名看歌词</span>
+  <button onclick="goto('raw')">原始调用</button>
+</div>
+
+<!-- ============ 主体 ============ -->
+<div class="shell">
+  <aside class="side">
+    <h4>发现</h4>
+    <div class="nav">
+      <a data-view="daily"><span class="ic">✨</span>每日推荐</a>
+      <a data-view="profile"><span class="ic">🧠</span>AI 用户侧写</a>
+      <a data-view="fm"><span class="ic">📻</span>私人 FM</a>
+      <a data-view="search"><span class="ic">🔍</span>搜索结果</a>
+    </div>
+    <h4>我的音乐</h4>
+    <div class="nav">
+      <a data-view="playlists"><span class="ic">📋</span>我的歌单</a>
+      <a data-view="liked"><span class="ic">❤</span>红心歌曲</a>
+      <a data-view="history"><span class="ic">📊</span>听歌排行</a>
+      <a data-view="recent"><span class="ic">⏱</span>最近播放</a>
+    </div>
+    <h4>工具</h4>
+    <div class="nav">
+      <a data-view="lyrics"><span class="ic">📖</span>歌词查询</a>
+      <a data-view="artist"><span class="ic">🎤</span>歌手热歌</a>
+      <a data-view="raw"><span class="ic">🧪</span>原始调用</a>
+    </div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+
+<!-- ============ 正在播放条（点播放后出现） ============ -->
+<div class="playbar" id="playbar" style="display:none"></div>
+
+<script>
+/* ==========================================================================
+   网易云音乐控制台 —— 直接以 JSON-RPC 调用本机 MCP 服务（POST /mcp）。
+   服务已允许 localhost Origin 跨域，因此浏览器可直连，无需后端代理。
+   服务端返回的歌曲行格式（_line 生成，各工具 extra 不同）：
+     "1. 歌名 - 歌手 (ID:123)"                          search / playlist / fm…
+     "1. 歌名 - 歌手 (专辑 | 3:21 | ID:123)"             search_song
+     "1. 歌名 - 歌手 (plays: 100, ID:123)"               get_play_history
+     "1. 歌名 - 歌手 (ID:123) [2026-10-20 14:12 UTC+8]"  get_recent_plays
+     "1. 歌名 - 歌手 (why: 因为你喜欢…, ID:123)"          daily_recommend
+     "1. 歌名 - 歌手 (Album: 专辑, ID:123)"              get_personal_fm
+     "1. 歌名 - 歌手 (3:21, ID:123)"                     get_playlist_songs
+   ========================================================================== */
+
+const LOCAL = location.origin.startsWith('http') && /127\.0\.0\.1|localhost/.test(location.host);
+const EP_KEY = 'netease_mcp_endpoint';
+let ENDPOINT = localStorage.getItem(EP_KEY) || (LOCAL ? location.origin + '/mcp' : 'http://127.0.0.1:3456/mcp');
+
+const main = document.getElementById('main');
+let rpcId = 0;
+
+/* ---------------- JSON-RPC ---------------- */
+async function rpc(method, params) {
+  const res = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: method, params: params || {} }),
+  });
+  if (res.status === 403) throw new Error('服务拒绝了这个来源（Origin 未放行）');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || 'JSON-RPC error');
+  return data.result;
+}
+
+async function callTool(name, args) {
+  const r = await rpc('tools/call', { name: name, arguments: args || {} });
+  const txt = r && r.content && r.content[0] ? r.content[0].text : '';
+  let parsed;
+  try { parsed = JSON.parse(txt); } catch (e) { parsed = { raw: txt }; }
+  if ((r && r.isError) || (parsed && parsed.error && parsed.code !== 200)) {
+    const err = new Error(parsed.error || '调用失败');
+    err.detail = parsed.detail || parsed.hint || null;
+    throw err;
+  }
+  return parsed;
+}
+
+/* ---------------- 解析 ---------------- */
+const RE_PL = /^ID:(\d+)\s*\|\s*(.*?)\s*\|\s*(\d+)\s*songs?\s*\|\s*(mine|collected)(?:\s*\|\s*(.*))?$/;
+
+function parsePlaylists(list) {
+  return (list || []).map(function (s) {
+    const m = String(s).match(RE_PL);
+    if (m) return { id: +m[1], name: m[2], count: +m[3], owner: m[4], desc: m[5] || '' };
+    const g = String(s).match(/^ID:(\d+)\s*\|\s*(.*?)\s*\|\s*(\d+)/);
+    if (g) return { id: +g[1], name: g[2], count: +g[3], owner: '', desc: '' };
+    return { id: null, name: String(s), count: 0, owner: '', desc: '' };
+  });
+}
+
+/** 解析一行歌曲；extra 里可能同时含 专辑/时长/plays/why，逐项识别。 */
+function parseSongs(list) {
+  return (list || []).map(function (line) {
+    const s0 = String(line).trim();
+    const out = { name: s0, artist: '', id: null, album: '', dur: '', extra: '', time: '' };
+    const body = s0.replace(/^\d+\.\s*/, '');
+    const idm = body.match(/\(([^()]*?ID:(\d+)[^()]*?)\)\s*(?:\[(.*)\])?\s*$/);
+    if (!idm) return out;
+    out.id = +idm[2];
+    out.time = idm[3] || '';
+
+    // 括号内、ID 之前的部分：可能含 "专辑 | 3:21"、"plays: 12"、"why: ..."、"Album: x"
+    let extra = idm[1].replace(/,?\s*ID:\d+\s*$/, '').replace(/^[,\s]+|[,\s]+$/g, '');
+    const pm = extra.match(/plays:\s*(\d+)/);
+    if (pm) { out.extra = '播放 ' + pm[1] + ' 次'; extra = extra.replace(pm[0], ''); }
+    const wm = extra.match(/why:\s*([^,]+)/);
+    if (wm) { out.extra = wm[1].trim(); extra = extra.replace(wm[0], ''); }
+    const am = extra.match(/Album:\s*([^,]+)/);
+    if (am) { out.album = am[1].trim(); extra = extra.replace(am[0], ''); }
+    extra = extra.replace(/^[,\s|]+|[,\s|]+$/g, '');
+    // 剩下的 "专辑 | 3:21" 或 "3:21"
+    if (extra) {
+      const parts = extra.split('|').map(function (x) { return x.trim(); }).filter(Boolean);
+      parts.forEach(function (p) {
+        if (/^\d+:\d{2}$/.test(p)) out.dur = p;
+        else if (!out.album) out.album = p;
+      });
+    }
+    if (!out.time && idm[3]) out.time = idm[3];
+
+    let rest = body.slice(0, idm.index).trim();
+    const dash = rest.indexOf(' - ');
+    if (dash === -1) { out.name = rest; }
+    else { out.name = rest.slice(0, dash).trim(); out.artist = rest.slice(dash + 3).trim(); }
+    return out;
+  });
+}
+
+/* ---------------- 渲染助手 ---------------- */
+function esc(s) {
+  return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function loading(msg) {
+  main.innerHTML = '<div class="empty"><span class="spin"></span>' + esc(msg || '加载中…') + '</div>';
+}
+function fail(e) {
+  main.innerHTML = '<div class="err"><b>出错了：</b>' + esc(e.message) +
+    (e.detail ? '<div style="margin-top:8px;color:#7a4a4a">' + esc(JSON.stringify(e.detail)) + '</div>' : '') + '</div>';
+}
+function head(title, sub, actions) {
+  return '<div class="pg-head"><h2>' + esc(title) + '</h2>' +
+    (sub ? '<span class="sub">' + esc(sub) + '</span>' : '') +
+    (actions ? '<span class="act">' + actions + '</span>' : '') + '</div>';
+}
+function songTable(songs, opts) {
+  opts = opts || {};
+  if (!songs.length) return '<div class="empty">没有歌曲</div>';
+  // 记住当前列表，供连播使用
+  window._curSongs = songs;
+  window._curTitle = opts.title || '';
+  const rows = songs.map(function (s, i) {
+    const a = attr(s.name), ar = attr(s.artist || '');
+    const nameCell = s.id
+      ? '<span class="play" title="播放（连播整张列表）" onclick="playSong(' + s.id + ',' + a + ',' + ar + ',' + i + ')">▶</span>' +
+        '<span style="cursor:pointer" title="查看歌词" onclick="showLyrics(' + s.id + ',' + a + ')">' + esc(s.name) + '</span>'
+      : esc(s.name);
+    const extraBits = [];
+    if (s.extra) extraBits.push(esc(s.extra));
+    if (s.time) extraBits.push(esc(s.time));
+    return '<tr>' +
+      '<td class="c-no">' + (i + 1) + '</td>' +
+      '<td class="ttl">' + nameCell + (extraBits.length ? ' <span style="color:#C20C0C;font-size:11px">' + extraBits.join(' · ') + '</span>' : '') + '</td>' +
+      '<td class="ar">' + esc(s.artist) + '</td>' +
+      '<td class="alb">' + esc(s.album || '') + '</td>' +
+      '<td class="dur">' + esc(s.dur || '') + '</td>' +
+      '<td class="c-op">' +
+        (s.id ? '<button class="playbtn" onclick="playSong(' + s.id + ',' + a + ',' + ar + ',' + i + ')">播放</button>' +
+                '<button onclick="copyId(' + s.id + ')">复制ID</button>' +
+                (opts.noAdd ? '' : '<button onclick="quickAdd(' + s.id + ')">+歌单</button>') : '') +
+      '</td></tr>';
+  }).join('');
+  return '<table class="stable"><thead><tr>' +
+    '<th class="c-no">#</th><th>音乐标题</th><th style="width:170px">歌手</th>' +
+    '<th class="alb">专辑</th><th class="dur">时长</th><th class="c-op">操作</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function attr(s) { return JSON.stringify(String(s)).replace(/"/g, '&quot;'); }
+
+/** 列表页共用的「播放全部」按钮（点击即从第一首开始连播） */
+const playAllBtn = '<button class="btn primary" onclick="playAll()">▶ 播放全部</button>';
+window.playAll = function () {
+  const list = window._curSongs || [];
+  if (!list.length) { toast('没有可播放的歌曲'); return; }
+  playList(list, 0, window._curTitle || '');
+};
+
+/* ---------------- 播放：跳转网易云网页 / 本地客户端 ---------------- */
+/* 服务端 play_music 返回 link(网页) 与 app_link(orpheus:// 客户端协议)；
+   列表里的歌我们只有 id，因此本地自行拼两种链接。 */
+function webUrl(id) { return 'https://music.163.com/#/song?id=' + id; }
+function appUrl(id) { return 'orpheus://song/' + id; }
+
+const PLAY_PREF_KEY = 'netease_play_pref';
+let playPref = localStorage.getItem(PLAY_PREF_KEY) || 'ask';  // ask | web | app
+
+/** 在指定位置弹出播放方式菜单 */
+function playMenu(anchorEl, song) {
+  closePlayMenu();
+  const id = song.id;
+  const menu = document.createElement('div');
+  menu.className = 'pmenu';
+  menu.id = 'pmenu';
+  menu.innerHTML =
+    '<div class="hd"><b>' + esc(song.name) + '</b>' + (song.artist ? ' — ' + esc(song.artist) : '') + '</div>' +
+    '<a data-mode="web" href="' + webUrl(id) + '" target="_blank" rel="noopener">' +
+      '<span class="ic">🌐</span><span class="tx"><span class="t1">网页播放器</span>' +
+      '<span class="t2">music.163.com 在线试听</span></span></a>' +
+    '<a data-mode="app" href="' + appUrl(id) + '">' +
+      '<span class="ic">💻</span><span class="tx"><span class="t1">本地网易云音乐</span>' +
+      '<span class="t2">用已安装的客户端打开</span></span></a>' +
+    '<div class="sep"></div>' +
+    '<a data-mode="copy"><span class="ic">🔗</span><span class="tx">' +
+      '<span class="t1">复制链接</span><span class="t2">网页地址</span></span></a>' +
+    '<a data-mode="def"><span class="ic">⚙</span><span class="tx">' +
+      '<span class="t1">设为默认播放方式</span>' +
+      '<span class="t2">以后点 ▶ 直接跳转</span></span></a>';
+  document.body.appendChild(menu);
+
+  // 定位：优先贴住按钮下方，超出视口则上翻
+  const r = anchorEl.getBoundingClientRect();
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  let left = Math.min(r.left, window.innerWidth - mw - 8);
+  let top = r.bottom + 6;
+  if (top + mh > window.innerHeight - 10) top = Math.max(8, r.top - mh - 6);
+  menu.style.left = Math.max(8, left) + 'px';
+  menu.style.top = top + 'px';
+
+  menu.addEventListener('click', function (e) {
+    const a = e.target.closest('a[data-mode]');
+    if (!a) return;
+    const mode = a.dataset.mode;
+    if (mode === 'copy') {
+      e.preventDefault();
+      const url = webUrl(id);
+      navigator.clipboard.writeText(url).then(function () { toast('已复制：' + url); },
+        function () { toast('复制失败'); });
+      closePlayMenu(); return;
+    }
+    if (mode === 'def') {
+      e.preventDefault();
+      localStorage.setItem(PLAY_PREF_KEY, 'web');
+      playPref = 'web';
+      toast('已设为：网页播放器');
+      closePlayMenu(); return;
+    }
+    // web / app：正常跳转 + 记录为非默认的最近选择
+    notePlayed(song, mode);
+    closePlayMenu();
+  });
+  setTimeout(function () {
+    document.addEventListener('mousedown', outsideClose, true);
+  }, 0);
+}
+function outsideClose(e) {
+  const m = document.getElementById('pmenu');
+  if (m && !m.contains(e.target)) closePlayMenu();
+}
+function closePlayMenu() {
+  const m = document.getElementById('pmenu');
+  if (m) m.remove();
+  document.removeEventListener('mousedown', outsideClose, true);
+}
+
+/** 点 ▶ / 播放 的入口：按偏好决定直接跳转还是弹菜单 */
+window.playSong = function (id, name, artist, listIdx, listTitle) {
+  const song = { id: id, name: name, artist: artist || '' };
+  // 列表内单曲播放：把整张列表载入队列，便于「下一首」继续
+  if (typeof listIdx === 'number' && window._curSongs && window._curSongs.length) {
+    playList(window._curSongs, listIdx, window._curTitle || '');
+    return;
+  }
+  if (playPref === 'web') { notePlayed(song, 'web'); window.open(webUrl(id), '_blank', 'noopener'); return; }
+  if (playPref === 'app') { notePlayed(song, 'app'); location.href = appUrl(id); return; }
+  playMenu(window.event && window.event.target ? window.event.target : document.body, song);
+};
+
+/* ---------------- 正在播放条 + 连播队列 ---------------- */
+let npTimer;
+const queue = { list: [], idx: -1, title: '' };
+
+/** 把当前视图的歌曲载入队列并从头（或指定位置）开始播放 */
+window.playList = function (songs, startIdx, title) {
+  const list = (songs || []).filter(function (s) { return s && s.id; });
+  if (!list.length) { toast('这个列表里没有可播放的歌'); return; }
+  queue.list = list;
+  queue.title = title || '';
+  queue.idx = Math.max(0, Math.min(startIdx || 0, list.length - 1));
+  renderQueue();
+  openCurrent();
+};
+
+function openCurrent() {
+  const s = queue.list[queue.idx];
+  if (!s) return;
+  const mode = (playPref === 'ask') ? 'web' : playPref;
+  // 连播时统一走网页播放器/客户端跳转，并保持队列前进
+  notePlayed(s, mode);
+  if (mode === 'app') { location.href = appUrl(s.id); }
+  else { window.open(webUrl(s.id), '_blank', 'noopener'); }
+  renderQueue();
+}
+
+window.qNext = function () {
+  if (queue.idx < 0) { toast('队列是空的'); return; }
+  if (queue.idx >= queue.list.length - 1) { toast('已经是最后一首'); return; }
+  queue.idx++; openCurrent();
+};
+window.qPrev = function () {
+  if (queue.idx <= 0) { toast('已经是第一首'); return; }
+  queue.idx--; openCurrent();
+};
+window.qJump = function (i) { queue.idx = i; openCurrent(); };
+window.qClose = function () {
+  queue.list = []; queue.idx = -1;
+  const d = document.getElementById('qdrawer'); if (d) d.remove();
+  closePlaybar();
+};
+
+function renderQueue() {
+  let d = document.getElementById('qdrawer');
+  if (!queue.list.length) { if (d) d.remove(); return; }
+  if (!d) {
+    d = document.createElement('div');
+    d.className = 'qdrawer'; d.id = 'qdrawer';
+    document.body.appendChild(d);
+  }
+  const s = queue.list[queue.idx] || {};
+  d.innerHTML =
+    '<div class="qh"><span class="t">播放队列 <b>' + (queue.idx + 1) + '/' + queue.list.length + '</b>' +
+      (queue.title ? ' · ' + esc(queue.title) : '') + '</span>' +
+      '<button title="上一首" onclick="qPrev()">⏮</button>' +
+      '<button title="下一首" onclick="qNext()">⏭</button>' +
+      '<button title="关闭队列" onclick="qClose()">✕</button></div>' +
+    '<div class="ql">' + queue.list.map(function (x, i) {
+      return '<div class="qi' + (i === queue.idx ? ' on' : '') + '" onclick="qJump(' + i + ')">' +
+        '<span class="i">' + (i === queue.idx ? '▶' : (i + 1)) + '</span>' +
+        '<span class="n">' + esc(x.name) + '</span>' +
+        '<span class="a">' + esc(x.artist || '') + '</span></div>';
+    }).join('') + '</div>';
+}
+
+function notePlayed(song, mode) {
+  const bar = document.getElementById('playbar');
+  bar.style.display = 'flex';
+  document.body.classList.add('hasbar');
+  bar.classList.add('spinning');
+  const inQ = queue.list.length > 1;
+  bar.innerHTML =
+    '<span class="disc"></span>' +
+    '<div class="np"><div class="t1">' + esc(song.name) + '</div>' +
+    '<div class="t2">' + esc(song.artist || '') +
+      (inQ ? ' · 队列 ' + (queue.idx + 1) + '/' + queue.list.length : '') +
+      ' · ' + (mode === 'app' ? '已交给本地客户端' : '已在网页播放器打开') + '</div></div>' +
+    '<div class="ops">' +
+      (inQ ? '<button class="mode" title="上一首" onclick="qPrev()">⏮</button>' +
+             '<button class="mode" title="下一首" onclick="qNext()">⏭</button>' : '') +
+      '<a href="' + webUrl(song.id) + '" target="_blank" rel="noopener">网页</a>' +
+      '<a href="' + appUrl(song.id) + '">客户端</a>' +
+      '<button class="x" title="关闭" onclick="qClose()">✕</button>' +
+    '</div>';
+  clearTimeout(npTimer);
+  npTimer = setTimeout(function () { bar.classList.remove('spinning'); }, 6000);
+}
+window.closePlaybar = function () {
+  const bar = document.getElementById('playbar');
+  bar.style.display = 'none';
+  bar.classList.remove('spinning');
+  document.body.classList.remove('hasbar');
+  const d = document.getElementById('qdrawer'); if (d) d.remove();
+  queue.list = []; queue.idx = -1;
+};
+
+/* ---------------- 全局动作 ---------------- */
+window._pick = { list: [], addSong: null };
+window._back = null;
+
+let toastTimer;
+function toast(msg) {
+  let el = document.getElementById('toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { el.remove(); }, 2000);
+}
+window.copyId = function (id) {
+  navigator.clipboard.writeText(String(id)).then(function () { toast('已复制 ID: ' + id); },
+    function () { toast('复制失败'); });
+};
+window.likeIt = async function (id) {
+  try { const r = await callTool('like_song', { song_id: id, like: true }); toast(r.status || '已收藏'); }
+  catch (e) { toast(e.message); }
+};
+window.quickAdd = async function (songId) {
+  try {
+    const r = await callTool('list_my_playlists');
+    const mine = parsePlaylists(r.playlists).filter(function (p) { return p.owner === 'mine' && p.id; });
+    if (!mine.length) return toast('没有可写入的歌单');
+    window._pick.addSong = songId; window._pick.list = mine;
+    renderPick();
+  } catch (e) { toast(e.message); }
+};
+function renderPick() {
+  const p = window._pick;
+  main.innerHTML = head('加入歌单', '歌曲 ID: ' + p.addSong) +
+    '<div class="covers">' + p.list.map(function (x) {
+      return '<div class="cov" onclick="doAdd(' + x.id + ')">' +
+        '<div class="art"><span class="ph">♪</span></div>' +
+        '<div class="nm">' + esc(x.name) + '</div>' +
+        '<div class="meta"><span class="badge mine">自建</span><span>' + x.count + ' 首</span></div>' +
+        '</div>';
+    }).join('') + '</div>';
+}
+window.doAdd = async function (pid) {
+  loading('正在加入…');
+  try {
+    const r = await callTool('add_to_playlist', { playlist_id: pid, song_ids: String(window._pick.addSong) });
+    toast(r.status || '已加入');
+    viewPlaylists();
+  } catch (e) { fail(e); }
+};
+window.showLyrics = async function (id, name) {
+  window._back = currentView;
+  loading('正在取歌词…');
+  try {
+    const r = await callTool('get_song_lyrics', { song_id: id });
+    main.innerHTML = '<button class="back" onclick="goBack()">← 返回</button>' +
+      head(name || '歌词', 'ID: ' + id) +
+      '<div class="card"><div class="lyrics">' + esc(r.lyrics || '(无歌词)') +
+      (r.translation ? '\n\n<span class="tr">' + esc(r.translation) + '</span>' : '') +
+      '</div></div>' +
+      (r.note ? '<div class="tip">' + esc(r.note) + '</div>' : '');
+  } catch (e) { fail(e); }
+};
+window.goBack = function () { if (window._back) goto(window._back); else goto('daily'); };
+window.openPlaylist = async function (id, name) {
+  window._back = 'playlists';
+  loading('正在取歌单…');
+  try {
+    const r = await callTool('get_playlist_songs', { playlist_id: id });
+    const songs = parseSongs(r.songs);
+    main.innerHTML = '<button class="back" onclick="goBack()">← 返回歌单</button>' +
+      '<div class="hero"><div class="cov">♪</div><div class="info">' +
+      '<h3>' + esc(r.name || name) + '</h3>' +
+      '<div class="meta">' +
+        (r.creator ? '创建者：' + esc(r.creator) + '<br>' : '') +
+        '共 ' + (r.track_count || songs.length) + ' 首' +
+        (r.note ? ' · ' + esc(r.note) : '') +
+        (r.description ? '<br>' + esc(r.description) : '') +
+      '</div></div></div>' +
+      songTable(songs, {title:(r.name||name||'')});
+  } catch (e) { fail(e); }
+};
+
+/* ==========================================================================
+   视图
+   ========================================================================== */
+const views = {};
+
+views.daily = async function () {
+  loading('正在取每日推荐…');
+  const r = await callTool('daily_recommend');
+  const songs = parseSongs(r.recommendations);
+  main.innerHTML = head('每日推荐', (r.count || songs.length) + ' 首 · 按你口味生成', playAllBtn) + songTable(songs, {title:'每日推荐'});
+};
+
+views.fm = async function () {
+  loading('正在取私人 FM…');
+  const r = await callTool('get_personal_fm');
+  const songs = parseSongs(r.personal_fm);
+  main.innerHTML = head('私人 FM', songs.length + ' 首 · 算法挑选', playAllBtn) + songTable(songs, {title:'私人FM'});
+};
+
+views.liked = async function () {
+  loading('正在取红心歌曲…');
+  const r = await callTool('get_liked_songs', { limit: 200 });
+  const songs = parseSongs(r.liked_songs);
+  if (!songs.length) { main.innerHTML = head('红心歌曲') + '<div class="empty">还没有红心歌曲</div>'; return; }
+  main.innerHTML = head('红心歌曲', '共 ' + (r.count || songs.length) + ' 首' + (r.note ? ' · ' + r.note : ''), playAllBtn) +
+    songTable(songs, {title:'红心歌曲'});
+};
+
+views.history = async function () {
+  loading('正在取听歌排行…');
+  const r = await callTool('get_play_history', { all_time: false, limit: 100 });
+  const songs = parseSongs(r.history);
+  main.innerHTML = head('听歌排行', '本周循环最多 · ' + (r.count || songs.length) + ' 首', playAllBtn) + songTable(songs, {title:'听歌排行'});
+};
+
+views.recent = async function () {
+  loading('正在取最近播放…');
+  const r = await callTool('get_recent_plays', { limit: 100 });
+  const songs = parseSongs(r.recent_plays);
+  main.innerHTML = head('最近播放', (r.count || songs.length) + ' 条记录', playAllBtn) + songTable(songs, {title:'最近播放'}) +
+    (r.debug_record_keys ? '<div class="tip">服务未能从记录中解析时间字段，原始字段：' +
+      esc(r.debug_record_keys.join(', ')) + '</div>' : '');
+};
+
+views.playlists = viewPlaylists;
+async function viewPlaylists() {
+  loading('正在取歌单…');
+  const r = await callTool('list_my_playlists');
+  const pls = parsePlaylists(r.playlists);
+  const mine = pls.filter(function (p) { return p.owner === 'mine'; });
+  const col = pls.filter(function (p) { return p.owner !== 'mine'; });
+  function tiles(list) {
+    return '<div class="covers">' + list.map(function (p) {
+      return '<div class="cov" ' + (p.id ? 'onclick="openPlaylist(' + p.id + ',' + attr(p.name) + ')"' : '') + '>' +
+        '<div class="art"><span class="ph">♪</span>' +
+          '<div class="bar"><span class="pl">▷ ' + p.count + '</span></div>' +
+        '</div>' +
+        '<div class="nm">' + esc(p.name) + '</div>' +
+        '<div class="meta"><span class="badge ' + (p.owner === 'mine' ? 'mine' : '') + '">' +
+          (p.owner === 'mine' ? '自建' : '收藏') + '</span><span>' + p.count + ' 首</span></div>' +
+        '</div>';
+    }).join('') + '</div>';
+  }
+  main.innerHTML = head('我的歌单', '自建 ' + mine.length + ' · 收藏 ' + col.length) +
+    (mine.length ? '<h4 style="margin:0 0 12px;font-size:13px;font-weight:400;color:#666">自建歌单</h4>' + tiles(mine) : '') +
+    (col.length ? '<h4 style="margin:22px 0 12px;font-size:13px;font-weight:400;color:#666">收藏歌单</h4>' + tiles(col) : '');
+}
+
+views.search = async function () {
+  main.innerHTML = head('搜索', '在顶部搜索框输入后回车') +
+    '<div id="searchSug"><div class="empty"><span class="spin"></span>正在根据你的听歌记录准备快捷搜索…</div></div>';
+
+  let hist = [], week = [], recent = [];
+  try {
+    const [ha, hw, rc] = await Promise.all([
+      callTool('get_play_history', { all_time: true, limit: 100 }).catch(function () { return {}; }),
+      callTool('get_play_history', { all_time: false, limit: 100 }).catch(function () { return {}; }),
+      callTool('get_recent_plays', { limit: 300 }).catch(function () { return {}; }),
+    ]);
+    hist = parseSongs(ha.history); week = parseSongs(hw.history); recent = parseSongs(rc.recent_plays);
+  } catch (e) { /* 拿不到就用兜底 */ }
+
+  // 按出现频次统计歌手：最近播放权重最高，其次本周，最后历史
+  const score = {};
+  function bump(name, w) {
+    splitArtists(name).forEach(function (a) {
+      if (!a || a === '?' || a.length > 22) return;
+      score[a] = (score[a] || 0) + w;
+    });
+  }
+  recent.forEach(function (s) { bump(s.artist, 3); });
+  week.forEach(function (s) { bump(s.artist, 2); });
+  hist.forEach(function (s) { bump(s.artist, 1); });
+
+  const artists = Object.keys(score).map(function (k) { return { n: k, s: score[k] }; })
+    .sort(function (a, b) { return b.s - a.s; });
+
+  // 单曲：历史里播得最多的 + 本周在听的
+  const topSongs = hist.slice(0, 6);
+  const weekSongs = week.slice(0, 6);
+
+  // 时段 → 情境化关键词
+  const hours = new Array(24).fill(0);
+  recent.forEach(function (s) {
+    const m = String(s.time || '').match(/\s(\d{2}):/);
+    if (m) hours[+m[1]]++;
+  });
+  const nightN = hours.slice(22).concat(hours.slice(0, 5)).reduce(function (a, b) { return a + b; }, 0);
+  const nightRate = recent.length ? nightN / recent.length : 0;
+
+  function chips(title, hint, items, kind) {
+    if (!items.length) return '';
+    return '<div class="card"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:12px">' +
+      '<span style="font-size:13px;color:#333">' + esc(title) + '</span>' +
+      '<span style="font-size:11.5px;color:#999">' + esc(hint) + '</span></div>' +
+      '<div class="wordcloud">' + items.map(function (x) {
+        const kw = kind === 'song' ? x.name : x;
+        const sub = kind === 'song' ? (x.artist || '') : '';
+        return '<span class="w" style="cursor:pointer" title="' + esc(sub || kw) + '" ' +
+          'onclick="doSearch(' + attr(kw) + ')">' + esc(kw) + '</span>';
+      }).join('') + '</div></div>';
+  }
+
+  let html = '';
+
+  // 情境推荐：深夜 / 白天
+  if (nightRate > 0.25 && artists.length) {
+    html += '<div class="tip">🌙 你有 <b>' + Math.round(nightRate * 100) +
+      '%</b> 的播放发生在 22:00 之后——下面是些深夜常听的，点一下就能搜。</div>';
+  } else if (nightRate <= 0.25 && artists.length) {
+    html += '<div class="tip">☀️ 你的听歌时段比较规律，这些是你最近常听的，点一下即可搜索。</div>';
+  }
+
+  html += chips('最近在听的歌手', '点一下直接搜', artists.slice(0, 12).map(function (x) { return x.n; }), 'artist');
+  html += chips('本周循环', '你最近反复按播放的', weekSongs, 'song');
+  html += chips('历史最爱', '听得最多的老伙计', topSongs, 'song');
+
+  // 兜底：如果什么数据都没有
+  if (!artists.length && !weekSongs.length && !topSongs.length) {
+    html = '<div class="card"><div style="font-size:13px;color:#666;margin-bottom:10px">' +
+      '拿不到你的听歌记录，先试试这些常用搜索：</div>' +
+      '<div class="wordcloud">' + ['周杰伦', '陈奕迅', '林俊杰', 'Taylor Swift', 'Kendrick Lamar', 'Lo-Fi']
+        .map(function (k) {
+          return '<span class="w" style="cursor:pointer" onclick="doSearch(' + attr(k) + ')">' + esc(k) + '</span>';
+        }).join('') + '</div></div>';
+  }
+
+  const box = document.getElementById('searchSug');
+  if (box) box.outerHTML = html;
+};
+async function doSearch(kw) {
+  if (!kw.trim()) return;
+  setTopNav('search');
+  loading('正在搜索「' + kw + '」…');
+  try {
+    const r = await callTool('search_song', { query: kw, limit: 10 });
+    const songs = parseSongs(r.results);
+    main.innerHTML = head('搜索结果', '「' + kw + '」' + (songs.length ? ' · ' + songs.length + ' 条' : '')) +
+      (songs.length ? songTable(songs, {title:'搜索：'+kw}) : '<div class="empty">' + esc(r.note || '没有匹配的歌曲') + '</div>');
+  } catch (e) { fail(e); }
+}
+
+views.lyrics = function () {
+  main.innerHTML = head('歌词查询', '输入歌曲 ID') +
+    '<div class="card"><div class="field">' +
+    '<label>歌曲 ID</label><input id="lyrId" type="number" placeholder="例如 347230">' +
+    '<button class="btn primary" onclick="runLyrics()">查询</button></div>' +
+    '<div style="color:#999;font-size:12px">列表里点「复制ID」即可获得，或从 music.163.com 链接 ?id= 后取。</div></div>';
+};
+window.runLyrics = function () {
+  const v = document.getElementById('lyrId').value.trim();
+  if (v) window.showLyrics(+v, '');
+};
+
+views.artist = function () {
+  main.innerHTML = head('歌手热歌', '输入歌手 ID') +
+    '<div class="card"><div class="field">' +
+    '<label>歌手 ID</label><input id="arId" type="number" placeholder="例如 6452">' +
+    '<button class="btn primary" onclick="runArtist()">查询</button></div>' +
+    '<div style="color:#999;font-size:12px">从 music.163.com 歌手页链接 /artist?id= 取值。</div></div>';
+};
+window.runArtist = async function () {
+  const v = document.getElementById('arId').value.trim();
+  if (!v) return;
+  loading('正在取歌手热歌…');
+  try {
+    const r = await callTool('get_artist_hot_songs', { artist_id: +v });
+    const songs = parseSongs(r.hot_songs);
+    main.innerHTML = head(r.artist || '歌手热歌', 'Top ' + songs.length, playAllBtn) + songTable(songs, {title:(r.artist||'')+' 热歌'});
+  } catch (e) { fail(e); }
+};
+
+/* ==========================================================================
+   AI 用户侧写（精简版）
+   数据窗口 —— 这是接口的真实能力，筛选器据此如实映射：
+     · 全部时间 : get_play_history(all_time=true)  -> 前 100 名（含累计播放次数）
+     · 本周     : get_play_history(all_time=false) -> 前 100 名
+     · 最近事件 : get_recent_plays(limit=300)      -> 约最近 2 天、带分钟级时间戳
+   网易云并未提供任意时间段的播放历史，因此「1 年 / 1 月」不是真实可查的区间，
+   页面上会如实说明，而不是伪造一个数字。
+   ========================================================================== */
+
+function splitArtists(s) {
+  return String(s || '').split(/\s*[,，&]\s*/).map(function (x) { return x.trim(); })
+    .filter(Boolean)
+    .map(function (x) { return x.replace(/\s*\(.*?\)\s*/g, '').trim() || x; });
+}
+
+/** 按窗口分析。mode: 'all' | 'week' | 'recent' */
+function analyze(hist, week, recent, mode) {
+  const A = parseSongs(hist.history);
+  const W = parseSongs(week.history);
+  const R = parseSongs(recent.recent_plays);
+
+  function playsOf(s) {
+    const m = String(s.extra || '').match(/(\d+)/);
+    return m ? +m[1] : 0;
+  }
+  A.forEach(function (s) { s.plays = playsOf(s); });
+  W.forEach(function (s) { s.plays = playsOf(s); });
+
+  const base = (mode === 'week') ? W : A;
+  const total = base.reduce(function (n, s) { return n + s.plays; }, 0);
+  const avg = base.length ? total / base.length : 0;
+
+  function artistStats(list) {
+    const m = {};
+    list.forEach(function (s) {
+      const as = splitArtists(s.artist);
+      if (!as.length) return;
+      const each = (s.plays || 1) / as.length;
+      as.forEach(function (a) {
+        if (!m[a]) m[a] = { name: a, plays: 0, songs: 0 };
+        m[a].plays += each; m[a].songs += 1;
+      });
+    });
+    return Object.keys(m).map(function (k) { return m[k]; })
+      .sort(function (x, y) { return y.plays - x.plays; });
+  }
+  const artists = artistStats(base);
+  const artistsWeek = artistStats(W);
+
+  // 时段
+  const hours = new Array(24).fill(0);
+  R.forEach(function (s) {
+    const m = String(s.time || '').match(/\s(\d{2}):/);
+    if (m) hours[+m[1]]++;
+  });
+  const nightN = hours.slice(22).concat(hours.slice(0, 5)).reduce(function (x, y) { return x + y; }, 0);
+  const nightRate = R.length ? nightN / R.length : 0;
+  const peakHour = hours.some(function (n) { return n > 0; }) ? hours.indexOf(Math.max.apply(null, hours)) : -1;
+  function bucket(h) {
+    if (h < 0) return '—';
+    if (h >= 5 && h < 9) return '清晨';
+    if (h >= 9 && h < 12) return '上午';
+    if (h >= 12 && h < 14) return '午间';
+    if (h >= 14 && h < 18) return '下午';
+    if (h >= 18 && h < 22) return '晚上';
+    return '深夜';
+  }
+  const period = bucket(peakHour);
+
+  // 「最近事件」窗口专属统计：直接数这段带时间戳的播放流
+  const rArtist = {};
+  const rDays = {};
+  R.forEach(function (s) {
+    splitArtists(s.artist).forEach(function (x) {
+      if (!x) return;
+      rArtist[x] = (rArtist[x] || 0) + 1;
+    });
+    const m = String(s.time || '').match(/(\d{4}-\d{2}-\d{2})/);
+    if (m) rDays[m[1]] = 1;
+  });
+  const recentArtist = Object.keys(rArtist).map(function (k) { return { name: k, count: rArtist[k] }; })
+    .sort(function (x, y) { return y.count - x.count; })[0] || null;
+  const spanDays = Object.keys(rDays).length;
+
+  // 语言
+  let cjk = 0, latin = 0;
+  base.forEach(function (s) {
+    const t = (s.name || '') + (s.artist || '');
+    const c = /[\u4e00-\u9fa5]/.test(t), l = /[A-Za-z]/.test(t);
+    if (c && !l) cjk++; else if (l && !c) latin++;
+  });
+  const latinRate = base.length ? latin / base.length : 0;
+
+  const topShare = total && artists[0] ? artists[0].plays / total : 0;
+
+  // 一句话判词
+  function verdict() {
+    if (!base.length) return { v: '数据不足', one: '先去听几首歌吧。' };
+    const a0 = artists[0] ? artists[0].name : '';
+    if (mode === 'recent') {
+      // 「最近事件」窗口独有的判词：只看这段带时间戳的行为
+      if (!R.length) return { v: '最近没留下脚印', one: '这段时间没有播放记录。' };
+      if (nightRate >= 0.5) return { v: '你在用音乐对抗睡意', one: '最近 ' + R.length + ' 次播放里有 ' + Math.round(nightRate * 100) + '% 发生在 22:00 之后，' + period + '是你的主场。' };
+      if (recentArtist && recentArtist.count / R.length >= 0.2) return { v: '最近耳朵被一个人承包了', one: '「' + esc(recentArtist.name) + '」占了最近 ' + R.length + ' 次播放中的 ' + recentArtist.count + ' 次。' };
+      if (spanDays >= 2) return { v: '听得密，但没上头', one: '最近 ' + spanDays + ' 天里留下 ' + R.length + ' 次播放记录，歌换得挺勤。' };
+      return { v: '最近听得不多', one: '只捕捉到 ' + R.length + ' 次播放，再去听会儿吧。' };
+    }
+    if (mode === 'week') {
+      if (avg >= 8) return { v: '这周在拿一首歌当饭吃', one: '「' + a0 + '」被你反复按播放，本周单曲平均循环 ' + avg.toFixed(1) + ' 次。' };
+      if (W.length >= 40) return { v: '这周像个点唱机', one: '本周榜上 ' + W.length + ' 首、几乎不带重样，什么都想听一耳朵。' };
+      return { v: '这周听得挺随性', one: '本周 ' + W.length + ' 首，单曲平均 ' + avg.toFixed(1) + ' 次，没有特别上头的那一首。' };
+    }
+    if (avg >= 150) return { v: '你是个单曲循环怪物', one: '平均每首歌被你听了 ' + avg.toFixed(0) + ' 次——榜首「' + (A[0] ? A[0].name : '') + '」更是 ' + (A[0] ? A[0].plays : 0) + ' 次。' };
+    if (topShare >= 0.25) return { v: '你的耳朵认死一个人', one: '「' + a0 + '」一个人就占了你 ' + Math.round(topShare * 100) + '% 的播放量。' };
+    if (latinRate >= 0.6) return { v: '华语歌单里混进了半个欧美', one: '你听的歌里 ' + Math.round(latinRate * 100) + '% 是外语，耳朵早就不在国内了。' };
+    if (nightRate >= 0.35) return { v: '你的深夜比白天吵', one: '超过三分之一的播放发生在 22:00 之后，' + period + '才是你的主场。' };
+    if (avg <= 30) return { v: '你像个美食家，什么都尝一口', one: '单曲平均只循环 ' + avg.toFixed(1) + ' 次，涉猎广、不留恋。' };
+    return { v: '你的口味稳得像老朋友', one: '榜单头部固定、循环次数扎实，是个把歌听进生活里的人。' };
+  }
+  const vd = verdict();
+
+  return {
+    A: A, W: W, R: R, base: base, mode: mode,
+    total: total, avg: avg, artists: artists, artistsWeek: artistsWeek,
+    hours: hours, nightRate: nightRate, peakHour: peakHour, period: period,
+    recentArtist: recentArtist, spanDays: spanDays,
+    latinRate: latinRate, cjkRate: base.length ? cjk / base.length : 0,
+    topShare: topShare, verdict: vd.v, one: vd.one,
+    topSong: A[0] || null, topArtist: artists[0] || null,
+    weekTop: W[0] || null,
+  };
+}
+
+/** 趣味洞察：只出 3~4 条，短、有梗、有据 */
+function notes(a) {
+  const out = [];
+  const mode = a.mode;
+
+  // 1) 单曲上头
+  if (mode === 'recent') {
+    // 这个窗口没有播放次数，只有事件流：改用「谁出现最多」
+    if (a.recentArtist) {
+      out.push({
+        em: '🎯', h: '最近刷脸最多：<em>' + esc(a.recentArtist.name) + '</em>',
+        p: '最近 ' + a.R.length + ' 次播放里出现 ' + a.recentArtist.count + ' 次，占 ' +
+           Math.round(a.recentArtist.count / a.R.length * 100) + '%。' +
+           (a.recentArtist.count / a.R.length >= 0.3 ? '今天基本就听这一位了。' : ''),
+      });
+    }
+  } else {
+    const hero = mode === 'week' ? a.weekTop : a.topSong;
+    if (hero) {
+      const k = mode === 'week' ? '本周' : '历史';
+      out.push({
+        em: '🔁', h: k + '上头榜：<em>' + esc(hero.name) + '</em>',
+        p: '播放 ' + hero.plays + ' 次' + (hero.artist ? '，' + esc(hero.artist) : '') +
+           '。' + (hero.plays >= 500 ? '这已经不是喜欢，是肌肉记忆了。' :
+                   hero.plays >= 100 ? '单曲循环的典型症状。' : '还行，算克制。'),
+      });
+    }
+  }
+
+  // 2) 本命歌手（最近事件窗口已由第 1 条承担，这里不重复）
+  if (a.topArtist && mode !== 'recent') {
+    const names = a.artists.slice(0, 3).map(function (x) { return esc(x.name); });
+    out.push({
+      em: '💘', h: '本命是 <em>' + esc(a.topArtist.name) + '</em>',
+      p: (names.length > 1 ? '紧随其后的是 ' + names.slice(1).join('、') + '。' : '') +
+         '独占 ' + Math.round(a.topShare * 100) + '% 的播放量——' +
+         (a.topShare >= 0.2 ? '忠诚度很高。' : '不过你的爱也分给了不少人。'),
+    });
+  }
+
+  // 3) 作息
+  if (a.R.length) {
+    out.push({
+      em: a.nightRate >= 0.35 ? '🌙' : (a.period === '清晨' || a.period === '上午' ? '🌅' : '🎧'),
+      h: '高峰在 <em>' + (a.peakHour >= 0 ? a.peakHour + ':00' : '未知') + '</em>',
+      p: a.nightRate >= 0.35
+        ? '深夜（22:00–05:00）占了 ' + Math.round(a.nightRate * 100) + '%。耳机是助眠工具，还是熬夜的同谋？'
+        : '深夜占比只有 ' + Math.round(a.nightRate * 100) + '%，作息还算对得起身体。',
+    });
+  }
+
+  // 4) 语言
+  if (a.base.length >= 10) {
+    const lr = Math.round(a.latinRate * 100);
+    out.push({
+      em: lr >= 60 ? '🌍' : (lr <= 25 ? '🏮' : '🧭'),
+      h: lr >= 60 ? '耳朵已经出海' : (lr <= 25 ? '华语基本盘' : '中外混着听'),
+      p: '外语曲目 ' + lr + '%，华语 ' + Math.round(a.cjkRate * 100) + '%（按文字特征估算）。',
+    });
+  }
+
+  // 5) 一句趣味收尾
+  if (a.base.length || a.R.length) {
+    const q = mode === 'recent'
+      ? (a.nightRate >= 0.5 ? '“耳机一戴，谁都不爱——尤其在这个点。”'
+                            : '“最近这几天，音乐是背景，也是主角。”')
+      : a.avg >= 150
+      ? '“你不是在听歌，你是在单曲循环里定居。”'
+      : a.avg <= 30
+      ? '“歌单像转盘，转到哪首听哪首。”'
+      : a.nightRate >= 0.35
+      ? '“凌晨的歌单，比白天诚实。”'
+      : '“稳定输出，属于把音乐当背景音的务实派。”';
+    out.push({ em: '💬', quote: true, h: q, p: '' });
+  }
+  return out.slice(0, 5);
+}
+
+const RANGES = [
+  { id: 'all', label: '全部时间', sub: '累计排行 Top100' },
+  { id: 'week', label: '本周', sub: '最近 7 天' },
+  { id: 'recent', label: '最近事件', sub: '约 2 天·带时间' },
+];
+
+let pfRange = localStorage.getItem('netease_pf_range') || 'all';
+
+/** POST /analyze 的地址：由 MCP 端点推导出同源服务 */
+function aiUrl() {
+  const m = String(ENDPOINT).match(/^(https?:\/\/[^/]+)/);
+  return (m ? m[1] : location.origin) + '/analyze';
+}
+
+/** 只发送统计结果，不发送任何账号凭据或原始 Cookie。
+ *  每个数据块都标注来源，避免模型把「累计排行」的数字当成「最近事件」的数字。 */
+function statsPayload(a) {
+  const rng = RANGES.filter(function (r) { return r.id === a.mode; })[0];
+  const num = function (v, d) { return typeof v === 'number' && isFinite(v) ? v : d; };
+  const arr = function (v) { return Array.isArray(v) ? v : []; };
+  const isRecent = a.mode === 'recent';
+  const R = arr(a.R);
+
+  const p = {
+    range: rng ? rng.label : String(a.mode || ''),
+    basis: isRecent
+      ? '本窗口只有带时间戳的播放事件，没有累计播放次数'
+      : (a.mode === 'week' ? '基于最近 7 天收听排行' : '基于累计收听排行，各取前 100 名'),
+  };
+
+  if (isRecent) {
+    // 只给本窗口真实拥有的数据，绝不放累计次数
+    p.window_events = {
+      count: R.length,
+      span_days: num(a.spanDays, null),
+      top_artist: a.recentArtist
+        ? { name: a.recentArtist.name, count: num(a.recentArtist.count, 0) } : null,
+    };
+  } else {
+    p.ranking = {
+      songs: arr(a.base).length,
+      plays: num(a.total, 0),
+      avg_plays_per_song: +num(a.avg, 0).toFixed(2),
+      top_artist_share: +num(a.topShare, 0).toFixed(3),
+      top_artists: arr(a.artists).slice(0, 8).map(function (x) {
+        return { name: x.name, plays: Math.round(num(x.plays, 0)), songs: num(x.songs, 0) };
+      }),
+      top_songs: arr(a.A).slice(0, 10).map(function (x) {
+        return { name: x.name, artist: x.artist, plays: num(x.plays, 0) };
+      }),
+    };
+    if (a.mode === 'all') {
+      p.week_ranking = {
+        top_songs: arr(a.W).slice(0, 8).map(function (x) {
+          return { name: x.name, artist: x.artist, plays: num(x.plays, 0) };
+        }),
+      };
+    }
+  }
+
+  // 时段分布三个窗口都来自带时间戳的最近事件，明确标注
+  p.hourly = {
+    distribution: arr(a.hours),
+    peak_hour: num(a.peakHour, null),
+    night_ratio: +num(a.nightRate, 0).toFixed(3),
+    period: a.period || '',
+    source: '来自最近约 2 天的带时间戳播放事件',
+  };
+
+  p.language = {
+    latin_ratio: +num(a.latinRate, 0).toFixed(3),
+    cjk_ratio: +num(a.cjkRate, 0).toFixed(3),
+    note: '按歌名字符粗略估算，不是官方分类',
+  };
+  return p;
+}
+
+/** 点「用 AI 解读」后才把统计数字发给模型服务 */
+window.runAi = async function () {
+  const a = window._lastProfile;
+  const box = document.getElementById('aiBox');
+  if (!a || !box) return;
+  box.innerHTML = '<div class="ai-loading"><span class="spin"></span>' +
+    '正在请求模型解读…（数字已发送，凭据未发送）</div>';
+
+  // 先单独组装 payload：这一层出错是本地 bug，不该报成「连不上服务」
+  let body;
+  try {
+    body = JSON.stringify({ stats: statsPayload(a) });
+  } catch (e) {
+    box.innerHTML = '<div class="ai-err">本地统计数据组装失败：' + esc(e.message) +
+      '<div class="ai-off-hint">这是前端问题，不是网络问题。' +
+      '下方本地规则洞察仍然可用。</div></div>';
+    return;
+  }
+
+  try {
+    const res = await fetch(aiUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body,
+    });
+    const d = await res.json();
+    if (d.ok) {
+      window._aiText = d.analysis;
+      box.innerHTML = '<div class="ai-head">AI 解读' +
+        '<span class="ai-meta">' + esc(d.model || '') +
+        (d.elapsed_ms ? ' · ' + (d.elapsed_ms / 1000).toFixed(1) + 's' : '') +
+        (d.tokens && d.tokens.completion ? ' · ' + d.tokens.completion + ' tokens' : '') +
+        '</span></div>' +
+        '<div class="ai-body">' + esc(d.analysis).replace(/\n/g, '<br>') + '</div>' +
+        '<div class="ai-actions"><button class="btn" onclick="runAi()">重新解读</button>' +
+        '<button class="btn" onclick="copyAi()">复制</button></div>';
+    } else if (d.disabled) {
+      box.innerHTML = '<div class="ai-off">AI 解读未启用' +
+        '<div class="ai-off-hint">' + esc(d.hint || '') + '</div></div>';
+    } else {
+      box.innerHTML = '<div class="ai-err">模型调用失败：' + esc(d.error || '未知错误') +
+        (d.detail ? '<div class="ai-off-hint">' + esc(String(d.detail).slice(0, 240)) + '</div>' : '') +
+        '<div class="ai-off-hint">下方本地规则洞察仍然可用。</div></div>';
+    }
+  } catch (e) {
+    box.innerHTML = '<div class="ai-err">请求本机服务失败：' + esc(e.message) +
+      '<div class="ai-off-hint">确认服务在本机运行，且页面地址与 MCP 端点同源。' +
+      '下方本地规则洞察仍然可用。</div></div>';
+  }
+};
+
+window.copyAi = function () {
+  if (!window._aiText) return;
+  navigator.clipboard.writeText(window._aiText).then(function () { toast('已复制 AI 解读'); },
+    function () { toast('复制失败'); });
+};
+
+views.profile = async function () {
+  loading('正在采集听歌数据…');
+  try {
+    const [hist, week, recent] = await Promise.all([
+      callTool('get_play_history', { all_time: true, limit: 100 }).catch(function () { return {}; }),
+      callTool('get_play_history', { all_time: false, limit: 100 }).catch(function () { return {}; }),
+      callTool('get_recent_plays', { limit: 300 }).catch(function () { return {}; }),
+    ]);
+    window._pfRaw = { hist: hist, week: week, recent: recent };
+    renderProfile();
+  } catch (e) { fail(e); }
+};
+
+window.setRange = function (r) {
+  pfRange = r;
+  localStorage.setItem('netease_pf_range', r);
+  renderProfile();
+};
+
+function renderProfile() {
+  const raw = window._pfRaw;
+  if (!raw) return;
+  const a = analyze(raw.hist, raw.week, raw.recent, pfRange);
+  window._lastProfile = a;
+
+  const tabs = '<div class="pf-range">' + RANGES.map(function (r) {
+    return '<button class="' + (r.id === pfRange ? 'on' : '') + '" onclick="setRange(\'' + r.id + '\')">' +
+      esc(r.label) + '<span class="rs">' + esc(r.sub) + '</span></button>';
+  }).join('') + '</div>';
+
+  // 区间说明：如实交代接口能力
+  const caveat = {
+    all: '基于累计收听排行（最多 100 首）。',
+    week: '基于最近 7 天排行，只统计这一周。',
+    recent: '基于最近约 300 条播放事件，能精确到分钟——这是唯一带时间戳的窗口。',
+  }[pfRange];
+
+  let html = tabs;
+
+  html += '<div class="pf-hero">' +
+    '<div class="lb">你的音乐侧写 · ' + esc(RANGES.filter(function (r) { return r.id === pfRange; })[0].label) + '</div>' +
+    '<div class="verdict">' + esc(a.verdict) + '</div>' +
+    '<div class="one">' + a.one + '</div>' +
+    '</div>';
+
+  // 三张卡：本命 / 上头 / 时段
+  const isRecent = pfRange === 'recent';
+  html += '<div class="pf-cards">';
+
+  if (isRecent) {
+    // 最近事件窗口没有累计次数，展示事件流里最活跃的歌手
+    const ra = a.recentArtist;
+    html += '<div class="pf-c">' +
+      '<div class="ct">最近刷脸最多</div>' +
+      '<div class="cv" style="font-size:16px">' + (ra ? esc(ra.name) : '—') + '</div>' +
+      '<div class="cw">' + (ra && a.R.length ? ra.count + ' / ' + a.R.length + ' 次播放' : '暂无') + '</div>' +
+      (ra && a.R.length ? '<div class="bar"><i style="width:' +
+        Math.round(ra.count / a.R.length * 100) + '%"></i></div>' : '') +
+      '</div>';
+    html += '<div class="pf-c">' +
+      '<div class="ct">捕捉到的播放</div>' +
+      '<div class="cv">' + a.R.length + '</div>' +
+      '<div class="cw">' + (a.spanDays ? '跨 ' + a.spanDays + ' 天的事件流' : '带时间戳的事件') + '</div>' +
+      '</div>';
+  } else {
+    html += '<div class="pf-c">' +
+      '<div class="ct">本命歌手</div>' +
+      '<div class="cv">' + (a.topArtist ? esc(a.topArtist.name) : '—') + '</div>' +
+      '<div class="cw">' + (a.topArtist ? Math.round(a.topArtist.plays) + ' 次 · ' + a.topArtist.songs + ' 首' : '暂无') + '</div>' +
+      '<div class="bar"><i style="width:' + Math.round(a.topShare * 100) + '%"></i></div>' +
+      '</div>';
+    const hero = pfRange === 'week' ? a.weekTop : a.topSong;
+    html += '<div class="pf-c">' +
+      '<div class="ct">' + (pfRange === 'week' ? '本周上头' : '历史上头') + '</div>' +
+      '<div class="cv" style="font-size:15px">' + (hero ? esc(hero.name) : '—') + '</div>' +
+      '<div class="cw">' + (hero ? hero.plays + ' 次' + (hero.artist ? ' · ' + esc(hero.artist) : '') : '暂无') + '</div>' +
+      '</div>';
+  }
+  html += '<div class="pf-c">' +
+    '<div class="ct">听歌时段</div>' +
+    '<div class="cv">' + (a.period === '—' ? '—' : esc(a.period)) + '</div>' +
+    '<div class="cw">' + (a.peakHour >= 0
+      ? '高峰 ' + a.peakHour + ':00 · 深夜 ' + Math.round(a.nightRate * 100) + '%'
+      : '暂无时间数据') + '</div>' +
+    (a.hours.some(function (n) { return n > 0; })
+      ? '<div class="pf-hours">' + a.hours.map(function (n, h) {
+          const mx = Math.max.apply(null, a.hours) || 1;
+          return '<i class="' + (n === mx && n > 0 ? 'hot' : '') + '" style="height:' +
+            Math.max(2, Math.round(n / mx * 100)) + '%" title="' + h + ':00 · ' + n + ' 次"></i>';
+        }).join('') + '</div>'
+      : '') +
+    '</div>';
+  html += '</div>';
+
+  // AI 解读（可选，点了才发送统计数字）
+  html += '<div class="pf-ai"><div class="ai-cta">' +
+    '<div><div class="ai-cta-t">让模型写一段解读</div>' +
+    '<div class="ai-cta-s">只发送上面这些统计数字，不发送 Cookie 或账号信息</div></div>' +
+    '<button class="btn primary" onclick="runAi()">用 AI 解读</button>' +
+    '</div><div id="aiBox"></div></div>';
+
+  // 本地规则洞察（始终保留，作为兜底与对照）
+  const ns = notes(a);
+  html += '<div class="pf-notes-h">本地规则洞察</div>';
+  html += '<div class="pf-notes">' + ns.map(function (n) {
+    return '<div class="pf-note' + (n.quote ? ' quote' : '') + '">' +
+      (n.quote ? '' : '<span class="em">' + n.em + '</span>') +
+      '<div class="bd"><div class="h">' + n.h + '</div>' +
+      (n.p ? '<div class="p">' + n.p + '</div>' : '') + '</div></div>';
+  }).join('') + '</div>';
+
+  html += '<div class="pf-foot">' + esc(caveat) +
+    '<br>说明：网易云接口不提供任意时间段的历史播放记录，所以「1 年 / 1 月」无法真实查询；' +
+    '这里给出的三个窗口是接口实际能拿到的数据。' +
+    '<br><b>数据流向</b>：统计与本地规则洞察都在浏览器内完成，默认不联网；' +
+    '只有点击「用 AI 解读」时，上面那份统计数字才会经由本机服务转发给已配置的模型，' +
+    'Cookie 与账号信息始终不会离开本机。' +
+    '</div>';
+
+  html += '<div class="pf-tools">' +
+    '<button class="btn" onclick="copyProfileText()">复制文字版</button>' +
+    '<button class="btn" onclick="goto(\'profile\')">重新分析</button>' +
+    '</div>';
+
+  main.innerHTML = html;
+}
+
+window.copyProfileText = function () {
+  const a = window._lastProfile;
+  if (!a) return;
+  const rl = RANGES.filter(function (r) { return r.id === a.mode; })[0].label;
+  const L = ['【网易云音乐 · 用户侧写（' + rl + '）】', a.verdict, a.one, ''];
+  notes(a).forEach(function (n) {
+    L.push('· ' + n.h.replace(/<\/?em>/g, ''));
+    if (n.p) L.push('  ' + n.p);
+  });
+  navigator.clipboard.writeText(L.join('\n')).then(function () { toast('已复制'); },
+    function () { toast('复制失败'); });
+};
+
+const ALL_TOOLS = [
+  'search_song', 'play_music', 'get_play_history', 'get_recent_plays', 'daily_recommend',
+  'list_my_playlists', 'get_playlist_songs', 'create_playlist', 'add_to_playlist',
+  'remove_from_playlist', 'like_song', 'update_playlist_description', 'reorder_playlist_tracks',
+  'get_song_lyrics', 'get_song_details', 'get_artist_hot_songs', 'get_personal_fm', 'get_liked_songs'
+];
+
+views.raw = function () {
+  main.innerHTML = head('原始调用', '直接调用 MCP 工具') +
+    '<div class="card">' +
+      '<div class="field"><label>工具</label>' +
+        '<select id="rawTool" style="flex:1">' + ALL_TOOLS.map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select>' +
+      '</div>' +
+      '<div class="field"><label>参数</label>' +
+        '<input id="rawArgs" placeholder=\'JSON，例如 {"query":"周杰伦","limit":5}\'>' +
+        '<button class="btn primary" onclick="runRaw()">调用</button>' +
+      '</div>' +
+      '<pre class="raw" id="rawOut">（等待调用）</pre>' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="field" style="margin:0"><label>接口地址</label>' +
+        '<input id="epInput" value="' + esc(ENDPOINT) + '">' +
+        '<button class="btn" onclick="saveEp()">保存</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="field" style="margin:0"><label>播放方式</label>' +
+        '<select id="prefSel" onchange="setPref(this.value)" style="flex:1">' +
+          '<option value="ask"' + (playPref === 'ask' ? ' selected' : '') + '>每次询问（弹出菜单）</option>' +
+          '<option value="web"' + (playPref === 'web' ? ' selected' : '') + '>直接打开网页播放器</option>' +
+          '<option value="app"' + (playPref === 'app' ? ' selected' : '') + '>直接用本地网易云音乐打开</option>' +
+        '</select>' +
+      '</div>' +
+      '<div style="color:#999;font-size:12px;margin-top:10px">' +
+        '网页播放器：<code>https://music.163.com/#/song?id=&lt;ID&gt;</code><br>' +
+        '本地客户端：<code>orpheus://song/&lt;ID&gt;</code>（需已安装网易云音乐）' +
+      '</div>' +
+    '</div>';
+};
+window.setPref = function (v) {
+  playPref = v;
+  localStorage.setItem(PLAY_PREF_KEY, v);
+  toast('播放方式已保存');
+};
+window.runRaw = async function () {
+  const out = document.getElementById('rawOut');
+  const tool = document.getElementById('rawTool').value;
+  const raw = document.getElementById('rawArgs').value.trim();
+  let args = {};
+  if (raw) { try { args = JSON.parse(raw); } catch (e) { out.textContent = '参数不是合法 JSON'; return; } }
+  out.textContent = '调用中…';
+  try { out.textContent = JSON.stringify(await callTool(tool, args), null, 2); }
+  catch (e) {
+    out.textContent = '错误：' + e.message + (e.detail ? '\n\n' + JSON.stringify(e.detail, null, 2) : '');
+  }
+};
+window.saveEp = function () {
+  ENDPOINT = document.getElementById('epInput').value.trim();
+  localStorage.setItem(EP_KEY, ENDPOINT);
+  toast('已保存');
+  checkConn();
+};
+
+/* ==========================================================================
+   导航 / 连接
+   ========================================================================== */
+let currentView = null;
+function setTopNav(view) {
+  const top = ['daily', 'playlists', 'liked', 'history', 'recent'];
+  document.querySelectorAll('#topnav a').forEach(function (a) {
+    a.classList.toggle('on', a.dataset.view === view || (view === 'search' && a.dataset.view === 'daily'));
+  });
+  document.querySelectorAll('.side .nav a').forEach(function (a) {
+    a.classList.toggle('on', a.dataset.view === view);
+  });
+}
+function goto(view) {
+  if (view !== currentView) window._back = currentView;
+  currentView = view;
+  setTopNav(view);
+  const fn = views[view];
+  if (!fn) return;
+  Promise.resolve(fn()).catch(fail);
+}
+window.viewPlaylists = viewPlaylists;
+
+document.querySelectorAll('.side .nav a').forEach(function (a) {
+  a.addEventListener('click', function () { goto(a.dataset.view); });
+});
+document.querySelectorAll('#topnav a').forEach(function (a) {
+  a.addEventListener('click', function (e) { e.preventDefault(); goto(a.dataset.view); });
+});
+document.getElementById('q').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') doSearch(e.target.value);
+});
+
+const ledEl = document.getElementById('led');
+const connTxt = document.getElementById('connTxt');
+document.getElementById('epTxt').textContent = ENDPOINT;
+
+async function checkConn() {
+  ledEl.className = 'dotled';
+  connTxt.textContent = '检测中…';
+  try {
+    const r = await rpc('tools/list');
+    const n = (r && r.tools ? r.tools.length : 0);
+    ledEl.className = 'dotled on';
+    connTxt.textContent = '已连接 · ' + n + ' 个工具';
+    return true;
+  } catch (e) {
+    ledEl.className = 'dotled off';
+    connTxt.textContent = '未连接';
+    return false;
+  }
+}
+document.getElementById('conn').addEventListener('click', async function () {
+  if (await checkConn()) toast('服务正常');
+  else fail(new Error('无法连接 MCP 服务（' + ENDPOINT + '）。请确认服务已启动。'));
+});
+
+(async function () {
+  if (await checkConn()) goto('daily');
+  else {
+    main.innerHTML = head('无法连接') +
+      '<div class="err">连不上 MCP 服务：<code>' + esc(ENDPOINT) + '</code></div>' +
+      '<div class="card"><div style="margin-bottom:10px;color:#666">请先启动服务，再点左上角状态重试：</div>' +
+      '<pre class="raw">python server/mcp-server/server.py</pre>' +
+      '<div style="margin-top:12px;color:#999">默认监听 http://127.0.0.1:3456 ，端点为 POST /mcp 。若端口不同，可在「原始调用」里改接口地址。</div></div>';
+  }
+})();
+</script>
+</body>
+</html>
