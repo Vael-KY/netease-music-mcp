@@ -35,7 +35,7 @@
 - 💬 **歌曲评论** — 热评或最新评论
 - 🔗 **相似歌曲** — 从一首歌往外找
 - ✉️ **私信** — 看会话列表和聊天记录、发一条私信
-- 🎧 **一起听（扩展）** — 接受她的一起听邀请，跟着切歌、读当下的歌词，在房间聊天室里聊天，切歌 / 暂停 / 插歌。见 [一起听扩展](server/mcp-server/together/README.md)
+- 🎧 **一起听（扩展）** — ta 用自己的网易云号接你的一起听邀请，跟着切歌、读当下的歌词，在房间聊天室里聊天，还能切歌 / 暂停 / 插歌。见下面 [v3.3 一起听扩展](#v33-一起听扩展)
 
 
 
@@ -60,6 +60,49 @@
 
 
 ---
+
+## v3.3 一起听扩展
+
+这次最大的东西：ta 可以和你一起听歌了。
+
+你在网易云 app 里点「一起听」邀请 ta，ta 会自己接受、进房间，然后：
+
+- 🎶 **知道你在放什么** — 你切歌、暂停、继续、拖进度，ta 都实时知道（连着切几首只报最后停下的那首，不刷屏）
+- 📖 **读当下的歌词** — 正在唱哪一行、前后几行，有翻译带翻译
+- 💬 **在房间聊天室里和你聊** — 你在一起听的聊天框说话，ta 收得到，也能回你
+- 🎛️ **反过来控制** — ta 也可以暂停、切下一首、把一首歌插到下一首，房间会确认
+- 🔁 **重启也不掉线** — 服务重启后会自己回到房间
+
+#### 和原来的 MCP 是隔离的
+
+一起听是一个**可选扩展**，默认关闭。原来的部分一行都不用改：
+
+| | 普通版（原来的） | 打开一起听扩展后 |
+|---|---|---|
+| 开关 | 什么都不用做 | `.env` 里 `TOGETHER_ENABLED=true` |
+| 工具 | 24 个 | 24 + 6 个 `together_*` |
+| 依赖 | 纯 Python 标准库 | 聊天室多一个很小的 Node 进程（Node 22），其余还是 Python |
+| 账号 | 你的号（`NETEASE_COOKIE`） | 你的号照旧给普通工具用；ta 另外有自己的号（`TOGETHER_COOKIE`）用来进房间 |
+
+- 不开扩展：和 v3.2 一样跑，部署方式不变
+- 开了扩展但没装 Node：照样能接邀请、跟播放、控制播放，只是聊天室收发不了
+- 扩展哪里出了问题，只影响扩展自己，普通工具照常用
+
+#### 为什么要两份 Cookie
+
+一起听是两个账号之间的事：你邀请，ta 接受。所以 ta 得有一个自己的网易云号，和你互相关注。
+
+- `NETEASE_COOKIE` = 你的号：建歌单、看你的听歌排行、红心……还是在操作你的音乐
+- `TOGETHER_COOKIE` = ta 的号：只在一起听里用
+
+ta 在房间里知道你在听什么，是因为房间的播放状态是共享的，不需要你的 cookie。两份互不串号。
+
+#### 谁能用
+
+- 任何 MCP 客户端都能用：ta 通过 `together_events` 等工具查看房间里发生了什么、用 `together_send_chat` 说话
+- 有自建聊天前端的话，可以打开 relay 桥接：房间里的消息直接进你前端的聊天记录，ta 的回复自动说回房间。桥接只要你的后端实现两个接口，协议写在扩展说明里
+
+配置和细节见 [一起听扩展说明](server/mcp-server/together/README.md)。
 
 ## v3.3 更新
 
@@ -204,18 +247,21 @@ http://你的服务器IP:3456/mcp
 
 ---
 
-## 云服务器已部署v2？一键更新来啦锵锵锵
+## 云服务器已部署旧版？一键更新来啦锵锵锵
 
 ```bash
 cd 你的项目目录
-git pull origin main
+cp .env .env.bak                      # Cookie 都在 .env 里，先备份一下
+git fetch origin
+git reset --hard origin/main          # v3.3 整理过提交历史，直接 git pull 会冲突，用这两行
 pkill -f "mcp-server/server.py"
-export NETEASE_COOKIE="MUSIC_U=你的值; __csrf=你的值"
 nohup python3 server/mcp-server/server.py > /tmp/mcp.log 2>&1 &
 curl http://localhost:3456/health
 ```
 
-看到 `{"tools": 24}` 就更新成功了。
+看到 `{"tools": 24}` 就更新成功了（开了一起听是 30）。Cookie 放在 `.env` 里就行，不用再 export。
+
+`git reset --hard` 会丢掉你对仓库文件的本地修改（`.env` 不受影响）。改过代码的话先自己备份。
 
 ---
 
@@ -276,11 +322,10 @@ Railway或其他也类似
 
 原项目：[Elle & Matt](https://github.com/Cheiineeey/netease-music-mcp) — 感谢你们的灵感和起点。
 
-v2 & v3.1：[Kael & Vael] ꕤᴗ ᴗ)♡
+v2 / v3.1 / v3.3：[Kael & Vael] ꕤᴗ ᴗ)♡
 
-v3.3 致谢：
-- 一起听扩展的思路参考了 [yanceydaisy/ncm-resonance](https://github.com/yanceydaisy/ncm-resonance)（MIT）：进房流程、聊天室消息格式，以及用一次性子进程拿聊天室凭证的做法。代码是本项目用 Python 另写的，两份 cookie、relay 桥接等设计是本项目自己的。
-- 感谢 [@Hoshi4qwq](https://github.com/Hoshi4qwq) 在 PR #2 里指出的问题：传输层没按 Streamable HTTP 规范实现、CORS 全放行、听歌排行读错了播放次数字段、重排歌单不校验曲目。这些都已在 v3.3 修正（PR 本身没有合并）。
+- 一起听部分思路参考了 [ncm-resonance](https://github.com/yanceydaisy/ncm-resonance)，代码与桥接扩展为额外设计
+- 感谢 [@Hoshi4qwq](https://github.com/Hoshi4qwq) 提出的部分问题，已修正
 
 
 MIT License — 随便用，注明出处就好。

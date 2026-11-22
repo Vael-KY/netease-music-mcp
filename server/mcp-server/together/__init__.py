@@ -3,8 +3,8 @@
 Adds together_* tools to the core MCP server and runs a background worker that
 accepts invitations, follows playback and (with the Node transport installed)
 reads and writes the room chat. With COMPANION_RELAY_URL set, room events also
-flow into a Kael-companion relay like the WeChat bridge, and replies come back
-into the room.
+flow into a companion relay (a self-hosted chat frontend's backend), and replies
+come back into the room.
 """
 import logging
 import os

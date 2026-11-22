@@ -20,8 +20,8 @@ All notable changes to this project will be documented in this file.
 - Test suite (`python -m unittest discover -s tests -t tests`), no real account needed.
 
 ### Acknowledgment
-- The Listen Together extension's approach (joining flow, room message formats, fetching the chat-room ticket in a throwaway child process) follows [yanceydaisy/ncm-resonance](https://github.com/yanceydaisy/ncm-resonance) (MIT). The code here is a separate Python implementation.
-- Thanks to [@Hoshi4qwq](https://github.com/Hoshi4qwq) for the issues reported in PR #2 (transport not following Streamable HTTP, CORS open to every origin, `get_play_history` play count, `reorder_playlist_tracks` validation). They are fixed here; the PR itself was not merged.
+- Parts of the Listen Together approach were informed by [ncm-resonance](https://github.com/yanceydaisy/ncm-resonance); the code and the bridge extension are a separate design.
+- Thanks to [@Hoshi4qwq](https://github.com/Hoshi4qwq) for reporting some of the issues fixed here.
 
 
 ## [3.2.1] - 2026-10-12

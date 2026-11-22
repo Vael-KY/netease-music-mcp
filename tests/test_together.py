@@ -361,10 +361,10 @@ class RealRoomShapesTest(unittest.TestCase):
     def test_chat_nick_from_server_ext(self):
         raw = {'from_id_': '99', 'from_nick_': '', 'msg_type_': 0, 'msg_attach_': '你之前的消息我看到了。',
                'msg_body_': '', 'client_msg_id_': 'm1', 'timetag_': '1795350526724',
-               'msg_setting_': {'ext_': json.dumps({'serverExt': {'nickname': '_Hoeying_', 'userId': 99},
+               'msg_setting_': {'ext_': json.dumps({'serverExt': {'nickname': 'listener', 'userId': 99},
                                                    'clientExt': {'bizType': 'listenTogether', 'ltType': 'FRIEND'}})}}
         chat = decode_chat(raw)
-        self.assertEqual((chat['text'], chat['sender_nick'], chat['sender_id']), ('你之前的消息我看到了。', '_Hoeying_', '99'))
+        self.assertEqual((chat['text'], chat['sender_nick'], chat['sender_id']), ('你之前的消息我看到了。', 'listener', '99'))
 
     def test_next_command(self):
         raw = {'from_id_': '99', 'msg_type_': 100, 'msg_attach_': json.dumps({'msgType': 120, 'content': {

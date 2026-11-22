@@ -6,7 +6,7 @@
 - 读当下的歌词：`together_status` 返回正在唱的那一行和前后几行（有翻译会带上）
 - 在一起听的聊天室里和你聊天
 - 控制播放：暂停 / 继续 / 下一首 / 跳到队列里的某首 / 把一首歌插到下一首
-- 可选：像微信桥接一样，把房间里的事件送进 Kael-companion 的聊天记录，回复再说回房间
+- 可选：relay 桥接，把房间里的事件送进你自建聊天前端的聊天记录，回复再说回房间
 
 默认关闭。不开它，普通的网易云工具完全不受影响；开了但某一部分起不来（比如没装 Node），也只是那一部分不可用。
 
@@ -51,23 +51,32 @@ TOGETHER_COOKIE=AI账号的cookie      # 一起听用 AI 自己的号
 | `TOGETHER_NODE` | node | Node 的路径 |
 | `TOGETHER_DATA_DIR` | ./data/together | relay 桥接的 SQLite 存在这里 |
 
-### 接到 Kael-companion（和微信一样同步到前端）
+### relay 桥接（接到你自建的聊天前端）
+
+不开桥接也完全能用：任何 MCP 客户端都可以用 `together_events` 看房间里发生了什么，用 `together_send_chat` 说话。
+桥接是给有自建聊天前端的人用的：房间里的消息直接进你前端的聊天记录，回复自动说回房间，不用客户端一直轮询。
 
 ```
-COMPANION_RELAY_URL=https://你的relay地址       # 和微信桥接用的同一个
-COMPANION_RELAY_SECRET=RELAY_SECRET
-COMPANION_SESSION=                             # 对话 id，空 = 主对话
+COMPANION_RELAY_URL=https://你的relay地址
+COMPANION_RELAY_SECRET=你的relay密钥        # 以 Authorization: Bearer 发送
+COMPANION_SESSION=                         # 对话 id，空 = 主对话
 # 自签证书时：COMPANION_RELAY_CA_FILE=/path/to/ca.pem
 ```
 
-工作方式和微信桥接相同：
+你的后端（relay）需要提供三个接口：
 
-1. 房间里的聊天、切歌、暂停，带着 `reply_route = {channel: "netease", account: AI的uid, peer: 房间id}` 发到 relay 的 `/app/send`，进入同一份聊天记录，交给唯一的那个身体。切歌这类事件带一个 `poke` 附件，前端显示成一行小字，不当成她说的话。
-2. 回复带着同样的 `reply_route` 和 `in_reply_to`。扩展从 `/app/history` 读回来，只认回复自己发过去的事件的那些，一行一个气泡说回房间。
+| 接口 | 作用 |
+|---|---|
+| `GET /app/bridge-capabilities` | 返回 `{"protocol": 1, "body_protocol": 1, "body_connected": true, "brain": "desktop"}` 表示可以收消息了 |
+| `POST /app/send` | 收一条房间事件：`{text, attachments, api_session, reply_route, client_message_id}`，返回 `{id}`。同一个 `client_message_id` 重复发要当成同一条 |
+| `GET /app/history?since=<id>&limit=<n>`（以及 `?tail=1`） | 返回 `{"messages": [{id, from, kind, text, meta}]}`，扩展从这里读回复 |
+
+流程：
+
+1. 房间里的聊天、切歌、暂停，带着 `reply_route = {channel: "netease", account: AI的uid, peer: 房间id}` 发到 `/app/send`。切歌这类事件带一个 `{"poke": true, "line": "一行小字"}` 附件，前端可以显示成一行小字，不当成用户说的话。
+2. AI 的回复要存成 `from: "ai"`、`kind: "reply"`，`meta` 里带同样的 `reply_route`、`in_reply_to`（回复的是哪几条的 id）和 `api_session`。扩展只认回复自己发过去的事件的那些，一行一个气泡说回房间。
 3. 发出去的事件和要说的回复都记在 SQLite 里：重启不丢、不重复；发送超时的不重试（可能已经发出去了）；房间换了的回复不会说到新房间里。
-4. relay 的身体没连上时，事件先存着等它；超过 10 分钟没送出去的就不再送。
-
-relay 那边需要认 `netease` 频道（kael-companion 里 `BRIDGE_CHANNELS`）。
+4. 后端还没准备好收消息时，事件先存着等它；超过 10 分钟没送出去的就不再送。
 
 ## 工具
 

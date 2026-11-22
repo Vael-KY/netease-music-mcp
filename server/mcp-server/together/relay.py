@@ -1,8 +1,8 @@
-"""Bridge to a Kael-companion relay, the same way the WeChat bridge works.
+"""Optional bridge to a companion relay (the backend of a self-hosted chat frontend).
 
 Room events go in through POST /app/send with a reply_route
 {"channel": "netease", "account": <our uid>, "peer": <roomId>}. The relay saves them
-into the shared chat history and hands them to the one AI body. Its replies carry the
+into its chat history and hands them to the AI. Its replies carry the
 same reply_route plus in_reply_to; we read them back from /app/history and say them in
 the room.
 """
