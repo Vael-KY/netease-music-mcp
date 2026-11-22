@@ -85,6 +85,21 @@ DISPATCH = {"together_status": tool_status, "together_events": tool_events, "tog
             "together_control": tool_control, "together_queue_next": tool_queue_next, "together_leave": tool_leave}
 
 
+TOOL_SETS = {
+    'all': set(DISPATCH),
+    'control': {'together_status', 'together_control', 'together_queue_next', 'together_leave'},
+    'none': set(),
+}
+
+
+def tool_names(choice, bridged):
+    """Which together_* tools the MCP client sees. With the relay bridge, room chat flows
+    through the relay (her messages in, his replies back to the room), so by default no
+    tools are listed: they would only cost context and invite double sends."""
+    choice = (choice or '').strip().lower() or ('none' if bridged else 'all')
+    return set(TOOL_SETS.get(choice, TOOL_SETS['all']))
+
+
 def setup(core, env=None):
     """Called by the core server when TOGETHER_ENABLED is on."""
     env = env if env is not None else os.environ
@@ -124,7 +139,9 @@ def setup(core, env=None):
         bridge.start()
         logger.info("Listen Together: forwarding room events to the companion relay")
 
-    core.TOOLS.extend(TOOLS)
-    core.TOOL_DISPATCH.update(DISPATCH)
+    names = tool_names(env.get('TOGETHER_MCP_TOOLS'), bool(relay_url))
+    core.TOOLS.extend(t for t in TOOLS if t['name'] in names)
+    core.TOOL_DISPATCH.update({k: v for k, v in DISPATCH.items() if k in names})
+    logger.info("Listen Together: MCP tools: %s", ', '.join(sorted(names)) or 'none (chat goes through the relay)')
     worker.start()
     return worker

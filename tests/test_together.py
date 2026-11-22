@@ -380,3 +380,13 @@ class RealRoomShapesTest(unittest.TestCase):
         raw = {'msg_type_': 100, 'msg_attach_': json.dumps({'msgType': 120, 'content': {
             'type': 20010, 'bizType': 3, 'content': {'serverSeq': 1, 'roomId': 'R', 'listenCount': 442, 'duration': 164179}}})}
         self.assertIsNone(decode_playback(raw))
+
+
+class ToolSetTest(unittest.TestCase):
+    def test_bridge_hides_tools_by_default(self):
+        from together import tool_names, DISPATCH
+        self.assertEqual(tool_names(None, bridged=True), set())
+        self.assertEqual(tool_names('', bridged=False), set(DISPATCH))
+        self.assertEqual(tool_names('control', bridged=True),
+                         {'together_status', 'together_control', 'together_queue_next', 'together_leave'})
+        self.assertEqual(tool_names('ALL', bridged=True), set(DISPATCH))
