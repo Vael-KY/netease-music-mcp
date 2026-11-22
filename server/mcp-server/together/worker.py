@@ -26,6 +26,9 @@ logger = logging.getLogger("mcp-netease.together")
 ROOM_ENDED = 488  # NetEase's code when the room no longer exists
 
 
+# a song stopped further than this from its end was cut short, not run out
+SKIP_MARGIN_MS = 15000
+
 class Config:
     def __init__(self, env):
         num = lambda key, default: float(env.get(key) or default)
@@ -40,6 +43,8 @@ class Config:
         # append NetEase's own notes on the song (style, tags, BPM, chorus) to the song notice
         self.song_info = (env.get('TOGETHER_SONG_INFO') or 'true').lower() in ('1', 'true', 'yes', 'on')
         self.notify_pause = (env.get('TOGETHER_NOTIFY_PAUSE') or 'true').lower() in ('1', 'true', 'yes', 'on')
+        # a skip wakes the AI at most this often; skips in between are passed on quietly
+        self.skip_wake_gap_s = num('TOGETHER_SKIP_WAKE_GAP_SECONDS', 180)
         self.control_timeout_s = num('TOGETHER_CONTROL_TIMEOUT_SECONDS', 8)
 
 
@@ -71,6 +76,8 @@ class TogetherWorker:
         self.prev_status = 'UNKNOWN'
         self.pending_song_notice = None  # (due_time, song) while a song change settles
         self.song_change_by_self = False  # the last song change was the AI's own command
+        self.song_change_cut = False      # she cut the previous song short (rather than it running out)
+        self.last_skip_wake = 0.0
         self.loading_song = None
         self.joined_pending = False
         self.last_heartbeat = self.last_reconcile = self.last_realtime_try = 0
@@ -255,6 +262,15 @@ class TogetherWorker:
                             and song_id != self.loading_song)
             if changed_song:
                 self.loading_song = song_id
+                # Did she cut the last song short (a choice worth a word), or did it simply run out?
+                if self.song and self.playing and self.song.get('id') == self.playing.get('song_id'):
+                    left = (self.song.get('duration_ms') or 0) - self.progress_ms(observed_at)
+                    cut = (state.get('command') == 'GOTO' or self.playing.get('status') == 'PAUSE'
+                           or left > SKIP_MARGIN_MS)
+                else:
+                    cut = state.get('command') == 'GOTO'
+                # a quick run of changes counts as a skip if any of them was one
+                self.song_change_cut = cut or (bool(self.pending_song_notice) and self.song_change_cut)
             self.playing = {'song_id': song_id, 'status': status, 'progress': state.get('progress') or 0,
                             'observed_at': observed_at, 'server_seq': seq if seq is not None else last}
             prev_status, self.prev_status = self.prev_status, status
@@ -268,9 +284,9 @@ class TogetherWorker:
               and self.song and not self.pending_song_notice):  # a pending song notice already says whether it is paused
             name = f"《{self.song['name']}》— {self.song['artist']}"
             if status == 'PAUSE':
-                self._emit('playback', f'（一起听）{name} 暂停了。', '一起听 · 暂停')
+                self._emit('playback', f'（一起听）{name} 暂停了。', '一起听 · 暂停', wake=False)
             elif status == 'PLAY':
-                self._emit('playback', f'（一起听）继续播放 {name}。', '一起听 · 继续播放')
+                self._emit('playback', f'（一起听）继续播放 {name}。', '一起听 · 继续播放', wake=False)
 
     def _load_song(self, song_id):
         try:
@@ -303,6 +319,10 @@ class TogetherWorker:
             paused = (self.playing or {}).get('status') == 'PAUSE'
             if self.song_change_by_self and not joined:
                 return
+            cut, self.song_change_cut = self.song_change_cut, False
+            wake = bool(joined)
+            if cut and not joined and time.time() - self.last_skip_wake >= self.config.skip_wake_gap_s:
+                wake, self.last_skip_wake = True, time.time()
         name = f"《{song['name']}》— {song['artist']}"
         if joined == 'resumed':
             text = f'（一起听）重新连回了一起听的房间，现在放的是 {name}。'
@@ -310,15 +330,19 @@ class TogetherWorker:
         elif joined:
             text = f'（一起听）她把你拉进了一起听，现在放的是 {name}。'
             line = f'一起听 · 加入了，正在放{name}'
-        else:
-            text = f"（一起听）切到了 {name}{'，目前暂停着' if paused else ''}。"
+        elif cut:
+            text = f"（一起听）她把上一首切掉了，切到了 {name}{'，目前暂停着' if paused else ''}。"
             line = f'一起听 · 切到{name}'
+        else:
+            text = f"（一起听）上一首放完了，接着放 {name}{'，目前暂停着' if paused else ''}。"
+            line = f'一起听 · 接着放{name}'
         if song.get('album'):
             text += f"专辑《{song['album']}》。"
         if song.get('about'):
             text += f"{song['about']}。"
-        text += '想聊就聊，不想说话也可以安静陪着听。'
-        self._emit('song', text, line)
+        if wake:
+            text += '想聊就聊，不想说话也可以安静陪着听。'
+        self._emit('song', text, line, wake=wake)
 
     # ------------------------------------------------------------------ realtime events
     def on_realtime(self, event):
@@ -358,12 +382,14 @@ class TogetherWorker:
         self._emit('chat', chat['text'], None, key=key, sender=chat['sender_nick'])
 
     # ------------------------------------------------------------------ events out
-    def _emit(self, kind, text, line, room_id=None, chat_room_id=None, key=None, sender=None):
+    def _emit(self, kind, text, line, room_id=None, chat_room_id=None, key=None, sender=None, wake=True):
+        """wake=False: worth knowing, not worth waking the AI for (a song that simply ran out, a pause).
+        A bridge passes it on as a quiet event; the AI reads it with the next thing that does wake it."""
         room_id = room_id or self.room_id
         raw_key = key or f'{kind}:{room_id}:{text}:{time.time()}'
         event = {'key': 'netease:' + hashlib.sha256(raw_key.encode()).hexdigest()[:32], 'kind': kind, 'text': text,
                  'line': line, 'sender': sender, 'room_id': room_id, 'chat_room_id': chat_room_id or self.chat_room_id,
-                 'account': (self.account or {}).get('id'), 'time': time.time()}
+                 'account': (self.account or {}).get('id'), 'time': time.time(), 'wake': wake}
         with self.event_cond:
             self.event_seq += 1
             event['seq'] = self.event_seq

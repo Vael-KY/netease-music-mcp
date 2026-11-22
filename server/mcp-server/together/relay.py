@@ -67,7 +67,10 @@ class RelayBridge:
             return
         route = {'channel': CHANNEL, 'account': event['account'], 'peer': event['room_id']}
         attachments = [] if event['kind'] == 'chat' else [{'poke': True, 'line': event['line']}]
-        self.store.add_event(event['key'], {'text': event['text'], 'attachments': attachments, 'route': route})
+        payload = {'text': event['text'], 'attachments': attachments, 'route': route}
+        if attachments and event.get('wake') is False:
+            payload['quiet'] = True   # a relay that knows "quiet" keeps it without waking the AI
+        self.store.add_event(event['key'], payload)
 
     def start(self):
         threading.Thread(target=self._loop, name='together-relay', daemon=True).start()
@@ -101,7 +104,7 @@ class RelayBridge:
         for key, payload in self.store.pending_events():
             result = self.client.call('/app/send', {
                 'text': payload['text'], 'attachments': payload['attachments'], 'api_session': self.session,
-                'reply_route': payload['route'], 'client_message_id': key})
+                'reply_route': payload['route'], 'client_message_id': key, **({'quiet': True} if payload.get('quiet') else {})})
             self.store.mark_forwarded(key, result['id'])
 
     def collect(self):

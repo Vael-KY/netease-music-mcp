@@ -325,6 +325,70 @@ class RelayBridgeTest(unittest.TestCase):
         bridge.cycle()
         self.assertEqual(len(sidecar.sent), 2)  # nothing is said twice
 
+    def test_quiet_events_are_marked_for_the_relay(self):
+        worker, api, sidecar = make_worker()
+        relay, store = FakeRelay(), Store(':memory:')
+        bridge = RelayBridge(relay, store, worker, session='s1')
+        worker.sinks.append(bridge.accept)
+        worker.poll_once()
+        worker.poll_once()
+        worker.apply_playback({'song_id': '1', 'status': 'PAUSE', 'progress': 3000, 'server_seq': 2, 'sender_id': '99'},
+                              time.time(), 'realtime')
+        bridge.cycle()
+        join, pause = relay.sent
+        self.assertNotIn('quiet', join)
+        self.assertTrue(pause['quiet'])
+
+
+class WakeWorthyTest(unittest.TestCase):
+    """Only what is worth a word wakes the AI: her chat, joining, a song she cut short."""
+
+    def joined(self, **env):
+        worker, api, _ = make_worker(**env)
+        worker.poll_once()
+        worker.poll_once()
+        worker._flush_song_notice()
+        return worker
+
+    def change(self, worker, song_id, seq, at_ms, command='NEXT'):
+        # song 1 has played for at_ms when the change arrives
+        worker.playing.update(progress=at_ms, observed_at=time.time(), status='PLAY')
+        worker.apply_playback({'song_id': song_id, 'status': 'PLAY', 'progress': 0, 'server_seq': seq,
+                               'sender_id': '99', 'command': command}, time.time(), 'realtime')
+        worker._flush_song_notice()
+        return worker.events[-1]
+
+    def test_song_that_ran_out_is_quiet(self):
+        worker = self.joined()
+        self.assertTrue(worker.events[-1]['wake'])                        # joining wakes
+        e = self.change(worker, '2', 5, at_ms=195000)                      # 200 s song, 5 s left
+        self.assertFalse(e['wake'])
+        self.assertIn('上一首放完了', e['text'])
+        self.assertNotIn('想聊就聊', e['text'])
+
+    def test_skip_wakes_but_not_too_often(self):
+        worker = self.joined()
+        first = self.change(worker, '2', 5, at_ms=40000)
+        self.assertTrue(first['wake'])
+        self.assertIn('切掉了', first['text'])
+        second = self.change(worker, '3', 6, at_ms=20000)                  # another skip right away
+        self.assertFalse(second['wake'])
+        worker.last_skip_wake -= 181
+        third = self.change(worker, '2', 7, at_ms=20000)
+        self.assertTrue(third['wake'])
+
+    def test_picking_from_the_list_is_a_skip(self):
+        worker = self.joined()
+        self.assertTrue(self.change(worker, '3', 5, at_ms=199000, command='GOTO')['wake'])
+
+    def test_pause_is_quiet_chat_wakes(self):
+        worker = self.joined()
+        worker.apply_playback({'song_id': '1', 'status': 'PAUSE', 'progress': 3000, 'server_seq': 4, 'sender_id': '99'},
+                              time.time(), 'realtime')
+        self.assertFalse(worker.events[-1]['wake'])
+        worker.on_realtime({'ev': 'message', 'msg': {'msg_type_': 0, 'msg_attach_': '在吗', 'from_id_': '99', 'client_msg_id_': 'c1'}})
+        self.assertTrue(worker.events[-1]['wake'])
+
 
 if __name__ == '__main__':
     unittest.main()

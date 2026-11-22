@@ -34,7 +34,7 @@ def tool_status(params):
 
 def tool_events(params):
     events, last = STATE['worker'].wait_events(int(_num(params, 'after', 0, 0, 1e12)), _num(params, 'wait_seconds', 0, 0, 45))
-    return {'events': [{k: e[k] for k in ('seq', 'kind', 'text', 'sender', 'room_id')} for e in events], 'cursor': last}
+    return {'events': [{k: e.get(k) for k in ('seq', 'kind', 'text', 'sender', 'room_id', 'wake')} for e in events], 'cursor': last}
 
 
 def tool_send_chat(params):

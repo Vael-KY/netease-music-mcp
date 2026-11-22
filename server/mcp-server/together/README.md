@@ -46,6 +46,7 @@ TOGETHER_COOKIE=AI账号的cookie      # 一起听用 AI 自己的号
 | `TOGETHER_ACCEPT_ANY` | false | 不限定邀请人，接受最近联系人里任何人的邀请（不建议） |
 | `TOGETHER_SONG_DEBOUNCE_SECONDS` | 5 | 切歌后等几秒再通知，连切几首只说最后一首 |
 | `TOGETHER_NOTIFY_PAUSE` | true | 暂停 / 继续也通知 |
+| `TOGETHER_SKIP_WAKE_GAP_SECONDS` | 180 | 她手动切歌最多多久叫醒一次 AI（之间的切歌照样记下，只是不叫醒） |
 | `TOGETHER_SONG_INFO` | true | 切歌通知带上网易云音乐百科里的曲风、标签、BPM、语种、副歌位置 |
 | `TOGETHER_POLL_SECONDS` | 4 | 查房间状态、找邀请的间隔 |
 | `TOGETHER_HEARTBEAT_SECONDS` | 10 | 房间心跳间隔 |
@@ -73,8 +74,24 @@ COMPANION_SESSION=                         # 对话 id，空 = 主对话
 | 接口 | 作用 |
 |---|---|
 | `GET /app/bridge-capabilities` | 返回 `{"protocol": 1, "body_protocol": 1, "body_connected": true, "brain": "desktop"}` 表示可以收消息了 |
-| `POST /app/send` | 收一条房间事件：`{text, attachments, api_session, reply_route, client_message_id}`，返回 `{id}`。同一个 `client_message_id` 重复发要当成同一条 |
+| `POST /app/send` | 收一条房间事件：`{text, attachments, api_session, reply_route, client_message_id}`（可选 `quiet`，见下），返回 `{id}`。同一个 `client_message_id` 重复发要当成同一条 |
 | `GET /app/history?since=<id>&limit=<n>`（以及 `?tail=1`） | 返回 `{"messages": [{id, from, kind, text, meta}]}`，扩展从这里读回复 |
+
+#### 省钱：不是每件事都叫醒 AI
+
+一首歌三四分钟，如果每次换歌都叫醒 AI，一晚上就是几十次完整的对话，很费 token。所以房间里的事分轻重：
+
+| 房间里发生的事 | 叫醒 AI？ |
+|---|---|
+| 她在聊天室说话 | 叫醒 |
+| 进房 / 房间结束 | 叫醒 |
+| 她手动切歌（一首没放完就切掉，或者从列表里点了别的） | 叫醒，但两次之间至少隔 `TOGETHER_SKIP_WAKE_GAP_SECONDS` |
+| 一首放完、自动接下一首 | 不叫醒，记下来 |
+| 暂停 / 继续 | 不叫醒，记下来 |
+
+“记下来”的事件发给 relay 时带 `"quiet": true`。relay 照样存进聊天记录、前端照样显示成一行小字，只是不交给 AI；等下次真正叫醒 AI 时（她在聊天室说话，或者你前端自己的定时唤醒），再把这段时间攒下的事件一起带给它。这样 AI 依然知道放过的每一首，只是一起看。
+
+不认识 `quiet` 的 relay 会把它当普通事件处理，也就是每件事都叫醒，和以前一样，不会出错。`together_events` 返回的每个事件也带 `wake` 字段，只用 MCP 的客户端可以照这个决定要不要理会。
 
 流程：
 
