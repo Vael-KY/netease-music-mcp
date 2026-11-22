@@ -1,0 +1,4 @@
+# The Listen Together room chat needs NetEase IM's official SDK, which only exists for
+# Node/C++. together/nim/ is a ~170-line wrapper around it; everything else is Python.
+# Keep that wrapper out of GitHub's language statistics.
+server/mcp-server/together/nim/** linguist-vendored
