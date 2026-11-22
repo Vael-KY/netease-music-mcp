@@ -18,6 +18,7 @@ from collections import deque
 from .api import NeteaseApiError
 from .invite import collect_contact_ids, parse_latest_invite
 from .lyrics import lines_near, merge_translation, parse_lrc
+from .songinfo import describe
 from .realtime import build_text_message, decode_chat, decode_playback, wait_until
 
 logger = logging.getLogger("mcp-netease.together")
@@ -36,6 +37,8 @@ class Config:
         # debugging aid: append every raw room-transport event to this file
         self.raw_log = (env.get('TOGETHER_RAW_LOG') or '').strip() or None
         self.song_debounce_s = num('TOGETHER_SONG_DEBOUNCE_SECONDS', 5)
+        # append NetEase's own notes on the song (style, tags, BPM, chorus) to the song notice
+        self.song_info = (env.get('TOGETHER_SONG_INFO') or 'true').lower() in ('1', 'true', 'yes', 'on')
         self.notify_pause = (env.get('TOGETHER_NOTIFY_PAUSE') or 'true').lower() in ('1', 'true', 'yes', 'on')
         self.control_timeout_s = num('TOGETHER_CONTROL_TIMEOUT_SECONDS', 8)
 
@@ -273,6 +276,7 @@ class TogetherWorker:
         try:
             song = self.api.song(song_id)
             lrc, tlrc = self.api.lyrics(song_id)
+            song['about'] = describe(self.api.song_info(song_id)) if self.config.song_info else None
         finally:
             with self.lock:
                 if self.loading_song == song_id:
@@ -311,6 +315,8 @@ class TogetherWorker:
             line = f'一起听 · 切到{name}'
         if song.get('album'):
             text += f"专辑《{song['album']}》。"
+        if song.get('about'):
+            text += f"{song['about']}。"
         text += '想聊就聊，不想说话也可以安静陪着听。'
         self._emit('song', text, line)
 
@@ -502,7 +508,7 @@ class TogetherWorker:
                    'accepting_invites_from': self.config.inviter_uid or ('recent contacts' if self.config.accept_any else 'nobody (set TOGETHER_INVITER_UID)')}
             if self.song:
                 progress = self.progress_ms()
-                out['song'] = {k: self.song[k] for k in ('id', 'name', 'artist', 'album')}
+                out['song'] = {k: self.song.get(k) for k in ('id', 'name', 'artist', 'album', 'about')}
                 out['play_status'] = (self.playing or {}).get('status')
                 out['position'] = f"{progress // 60000}:{progress // 1000 % 60:02d} / {self.song['duration_ms'] // 60000}:{self.song['duration_ms'] // 1000 % 60:02d}"
                 if lyric_context:

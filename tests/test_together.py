@@ -117,6 +117,9 @@ class FakeApi:
     def lyrics(self, song_id):
         return '[00:00.00]la', None
 
+    def song_info(self, song_id):
+        return {'styles': ['流行'], 'tags': [], 'language': '英语', 'bpm': 111, 'awards': [], 'chorus': (2000, 36000)}
+
     def play_command(self, room_id, command, progress, status, former, target, seq):
         self.calls.append(('command', command, target, seq))
         self.state['playing'].update(song_id=target, status=status)
@@ -392,3 +395,41 @@ class ToolSetTest(unittest.TestCase):
         self.assertEqual(len(bridged), 6)
         self.assertIn('relay bridge is on', bridged['together_send_chat'])
         self.assertNotIn('relay bridge', plain['together_send_chat'])
+
+
+class SongInfoTest(unittest.TestCase):
+    """Shapes captured from the real 音乐百科 block and chorus endpoint (2026-11-22)."""
+
+    def wiki(self):
+        def creative(kind, title, names=(), texts=()):
+            return {'creativeType': kind, 'uiElement': {'mainTitle': {'title': title},
+                    'textLinks': [{'text': t} for t in texts] or None},
+                    'resources': [{'resourceType': 'melody_style', 'uiElement': {'mainTitle': {'title': n}}} for n in names]}
+        return {'code': 200, 'data': {'blocks': [
+            {'code': 'SONG_PLAY_ABOUT_MUSIC_MEMORY', 'creatives': []},
+            {'code': 'SONG_PLAY_ABOUT_SONG_BASIC', 'uiElement': {'mainTitle': {'title': '音乐百科'}}, 'creatives': [
+                creative('songTag', '曲风', names=['嘻哈说唱']), creative('songBizTag', '推荐标签', names=['活力']),
+                creative('language', '语种', texts=['英语']), creative('bpm', 'BPM', texts=['156']),
+                creative('songAward', '专辑荣誉', names=['第52届格莱美奖']), creative('sheet', '暂无乐谱')]}]}}
+
+    def test_parse_and_describe(self):
+        from together.songinfo import describe, parse_chorus, parse_wiki
+        info = parse_wiki(self.wiki())
+        self.assertEqual(info, {'styles': ['嘻哈说唱'], 'tags': ['活力'], 'language': '英语', 'bpm': 156, 'awards': ['第52届格莱美奖']})
+        info['chorus'] = parse_chorus({'code': 200, 'chorus': [{'id': 17793578, 'startTime': 23545, 'endTime': 49469}]}, '17793578')
+        self.assertEqual(describe(info), '嘻哈说唱 · 活力 · 156 BPM · 英语 · 副歌 0:23–0:49 · 获奖：第52届格莱美奖')
+
+    def test_missing_pieces(self):
+        from together.songinfo import describe, parse_chorus, parse_wiki
+        self.assertEqual(describe(parse_wiki({'code': 200, 'data': {'blocks': []}})), None)
+        self.assertIsNone(parse_chorus({'code': 200, 'chorus': []}, '1'))
+        self.assertEqual(describe(parse_wiki(None)), None)
+
+    def test_song_notice_carries_info(self):
+        worker, api, _ = make_worker()
+        worker.poll_once()
+        worker.poll_once()
+        worker.apply_playback({'song_id': '2', 'status': 'PLAY', 'progress': 0, 'server_seq': 3, 'sender_id': '99'}, time.time(), 'realtime')
+        worker._flush_song_notice()
+        self.assertIn('流行 · 111 BPM · 英语 · 副歌 0:02–0:36', worker.events[-1]['text'])
+        self.assertEqual(worker.status()['song']['about'], '流行 · 111 BPM · 英语 · 副歌 0:02–0:36')

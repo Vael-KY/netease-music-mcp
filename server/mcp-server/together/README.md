@@ -3,6 +3,7 @@
 让 AI 用自己的网易云账号接受你的「一起听」邀请，然后：
 
 - 跟着播放：你切歌、暂停、继续，它都知道（快速连切几首只算最后停下的那首）
+- 切歌通知自带歌曲详情：曲风、推荐标签、BPM、语种、副歌在哪（来自网易云自己的音乐百科），比如「嘻哈说唱 · 活力 · 156 BPM · 英语 · 副歌 0:23–0:49」
 - 读当下的歌词：`together_status` 返回正在唱的那一行和前后几行（有翻译会带上）
 - 在一起听的聊天室里和你聊天
 - 控制播放：暂停 / 继续 / 下一首 / 跳到队列里的某首 / 把一首歌插到下一首
@@ -45,6 +46,7 @@ TOGETHER_COOKIE=AI账号的cookie      # 一起听用 AI 自己的号
 | `TOGETHER_ACCEPT_ANY` | false | 不限定邀请人，接受最近联系人里任何人的邀请（不建议） |
 | `TOGETHER_SONG_DEBOUNCE_SECONDS` | 5 | 切歌后等几秒再通知，连切几首只说最后一首 |
 | `TOGETHER_NOTIFY_PAUSE` | true | 暂停 / 继续也通知 |
+| `TOGETHER_SONG_INFO` | true | 切歌通知带上网易云音乐百科里的曲风、标签、BPM、语种、副歌位置 |
 | `TOGETHER_POLL_SECONDS` | 4 | 查房间状态、找邀请的间隔 |
 | `TOGETHER_HEARTBEAT_SECONDS` | 10 | 房间心跳间隔 |
 | `TOGETHER_RAW_LOG` | 空 | 调试用：把聊天室收到的原始消息逐行写进这个文件 |

@@ -151,6 +151,22 @@ class TogetherApi:
                 'artist': ' / '.join(_clean(a.get('name')) or '?' for a in s.get('ar') or []) or '未知歌手',
                 'album': _clean((s.get('al') or {}).get('name')), 'duration_ms': int(s.get('dt') or 0)}
 
+    def song_info(self, song_id):
+        """NetEase's own notes on the song (style, tags, BPM, language, chorus). Best effort: {} on failure."""
+        from .songinfo import parse_chorus, parse_wiki
+        info = {}
+        try:
+            info = parse_wiki(self.core.netease_eapi('/api/song/play/about/block/page', {'songId': str(song_id)}))
+        except Exception:
+            pass
+        try:
+            chorus = parse_chorus(self.core.netease_eapi('/api/song/chorus', {'ids': json.dumps([str(song_id)])}), song_id)
+            if chorus:
+                info['chorus'] = chorus
+        except Exception:
+            pass
+        return info
+
     def lyrics(self, song_id):
         r = self.core.netease_request(f'/api/song/lyric?id={int(song_id)}&lv=1&tv=1', method='GET')
         if not isinstance(r, dict) or r.get('code') != 200:
