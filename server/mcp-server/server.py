@@ -7,11 +7,12 @@ for playlist management, music discovery, and listening history analysis.
 GitHub: https://github.com/Vael-KY/netease-music-mcp
 License: MIT
 """
-import http.server, json, os, urllib.request, urllib.parse, urllib.error, threading, uuid, time, logging
-import base64, secrets, string
+import http.server, json, os, sys, urllib.request, urllib.parse, urllib.error, threading, uuid, time, logging
+import base64, hashlib, hmac, queue, secrets, string, socketserver
+from collections import Counter
 from http.server import HTTPServer
 
-VERSION = "3.2.1"
+VERSION = "3.3.0"
 
 # --- .env loading ---
 def _load_dotenv():
@@ -48,8 +49,14 @@ NETEASE_COOKIE = os.environ.get("NETEASE_COOKIE", "")
 NETEASE_CSRF = os.environ.get("NETEASE_CSRF", "")
 NETEASE_UID = os.environ.get("NETEASE_UID", "")  # optional; looked up automatically if empty
 PORT = int(os.environ.get("MCP_PORT", "3456"))
+HOST = os.environ.get("MCP_HOST", "0.0.0.0")
+# Optional shared secret. When set, every MCP request needs `Authorization: Bearer <token>`.
+AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "").strip()
+# Browser origins allowed to call the server (comma-separated, exact match such as
+# https://chat.example.com). Requests without an Origin header (CLI clients, servers)
+# are not affected; localhost origins are always allowed.
+ALLOWED_ORIGINS = {o.strip().rstrip('/') for o in os.environ.get("MCP_ALLOWED_ORIGINS", "").split(',') if o.strip()}
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-SESSION_ID = str(uuid.uuid4())
 try:
     TZ_OFFSET_HOURS = float(os.environ.get("NETEASE_TZ_OFFSET", "0"))  # timezone of timestamps in tool output
 except ValueError:
@@ -99,16 +106,42 @@ def _device_cookies():
         })
     return _DEVICE
 
+_COOKIE_OVERRIDE = threading.local()
+
+def current_cookie():
+    """The account cookie in use. Normally NETEASE_COOKIE; inside `using_cookie(...)` it is
+    that cookie instead, for this thread only (the Listen Together extension uses this to
+    act as a second account without touching the normal tools)."""
+    override = getattr(_COOKIE_OVERRIDE, 'value', None)
+    return NETEASE_COOKIE if override is None else override
+
+def _csrf_fallback():
+    # NETEASE_CSRF belongs to NETEASE_COOKIE's account; never mix it into another account
+    return NETEASE_CSRF if getattr(_COOKIE_OVERRIDE, 'value', None) is None else ''
+
+class using_cookie:
+    """`with using_cookie(c): ...` makes every request in the block use cookie `c`."""
+    def __init__(self, cookie):
+        self.cookie = cookie
+    def __enter__(self):
+        self.previous = getattr(_COOKIE_OVERRIDE, 'value', None)
+        _COOKIE_OVERRIDE.value = self.cookie
+        return self
+    def __exit__(self, *exc):
+        _COOKIE_OVERRIDE.value = self.previous
+        return False
+
 def build_cookie_header():
-    jar = _parse_cookie(NETEASE_COOKIE)
-    if NETEASE_CSRF and '__csrf' not in jar:
-        jar['__csrf'] = NETEASE_CSRF  # the csrf_token we send must also be present as a cookie
+    jar = _parse_cookie(current_cookie())
+    csrf = _csrf_fallback()
+    if csrf and '__csrf' not in jar:
+        jar['__csrf'] = csrf  # the csrf_token we send must also be present as a cookie
     for key, value in _device_cookies().items():
         jar.setdefault(key, value)
     return '; '.join(f'{k}={v}' for k, v in jar.items())
 
 def get_csrf():
-    return _parse_cookie(NETEASE_COOKIE).get('__csrf') or NETEASE_CSRF or ''
+    return _parse_cookie(current_cookie()).get('__csrf') or _csrf_fallback() or ''
 
 def _hint(*results):
     """Short, actionable explanation for the usual failure codes."""
@@ -279,6 +312,59 @@ def netease_weapi(path, payload=None):
         logger.error("NetEase weapi error [%s]: %s", path.split('?', 1)[0], type(e).__name__)
         return {"code": -1, "error": str(e)}
 
+# --- eapi (the mobile/desktop client format; used by Listen Together and private messages) ---
+_EAPI_KEY = b'e82ckenh8dichen8'
+_EAPI_UA = 'NeteaseMusic 9.0.90/5038 (iPhone; iOS 16.2; zh_CN)'
+_EAPI_DEVICE_ID = secrets.token_hex(26).upper()
+
+def _aes_ecb_encrypt(data, key):
+    pad = 16 - len(data) % 16
+    data = data + bytes([pad]) * pad
+    rks = _expand_key(key)
+    out = bytearray()
+    for i in range(0, len(data), 16):
+        out += bytes(_encrypt_block(list(data[i:i + 16]), rks))
+    return bytes(out)
+
+def eapi_encrypt(api_path, payload):
+    """Encrypt a dict for an eapi endpoint. api_path is the '/api/...' form of the route."""
+    text = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+    digest = hashlib.md5(f'nobody{api_path}use{text}md5forencrypt'.encode()).hexdigest()
+    data = f'{api_path}-36cd479b6b5-{text}-36cd479b6b5-{digest}'.encode()
+    return {'params': _aes_ecb_encrypt(data, _EAPI_KEY).hex().upper()}
+
+def netease_eapi(api_path, payload=None):
+    """Make an eapi request. api_path like '/api/listen/together/heartbeat'."""
+    jar = _parse_cookie(current_cookie())
+    device = _device_cookies()
+    now_ms = int(time.time() * 1000)
+    header = {
+        'osver': jar.get('osver', device['osver']), 'deviceId': _EAPI_DEVICE_ID,
+        'os': jar.get('os', device['os']), 'appver': jar.get('appver', device['appver']),
+        'versioncode': '140', 'mobilename': '', 'buildver': str(now_ms)[:10],
+        'resolution': '1920x1080', '__csrf': get_csrf(), 'channel': jar.get('channel', device['channel']),
+        'requestId': f'{now_ms}_{secrets.randbelow(1000):04d}',
+    }
+    if jar.get('MUSIC_U'):
+        header['MUSIC_U'] = jar['MUSIC_U']
+    body = dict(payload or {}, header=header, e_r=False)
+    url = 'https://interface.music.163.com/eapi/' + api_path[len('/api/'):]
+    headers = {
+        'Cookie': '; '.join(f'{urllib.parse.quote(k)}={urllib.parse.quote(str(v))}' for k, v in header.items()),
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': _EAPI_UA,
+    }
+    try:
+        data = urllib.parse.urlencode(eapi_encrypt(api_path, body)).encode()
+        req = urllib.request.Request(url, data=data, headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return _http_error_result(f'/eapi{api_path[4:]}', e)
+    except Exception as e:
+        logger.error("NetEase eapi error [%s]: %s", api_path, type(e).__name__)
+        return {"code": -1, "error": str(e)}
+
 # Codes meaning "the gateway refused this route/format" (worth trying the other route),
 # as opposed to business errors such as 502 "song already in playlist".
 _ROUTE_FAILURES = {-1, 400, 403, 404, 405}
@@ -394,15 +480,57 @@ def get_play_history(params):
     result = netease_weapi('/v1/play/record', {'uid': uid, 'type': 0 if all_time else 1})
     if result.get('code') != 200:
         return {"error": "Failed to get play history", "detail": _with_hint(result)}
-    key = 'allData' if all_time else 'weekData'
-    records = (result.get(key) or [])[:limit]
+    records = _play_records(result, all_time)[:limit]
     output = []
     for i, r in enumerate(records, 1):
         song = r.get('song') or {}
         artists = ', '.join(a.get('name', '?') for a in song.get('ar') or [])
-        score = r.get('score', 0)
-        output.append(f"{i}. {song.get('name', '?')} - {artists} (plays: {score}, ID:{song.get('id')})")
+        # playCount is the real number of plays; score is NetEase's 0-100 ranking weight
+        output.append(f"{i}. {song.get('name', '?')} - {artists} (plays: {r.get('playCount', 0)}, ID:{song.get('id')})")
     return {"history": output}
+
+def _play_records(result, all_time):
+    return result.get('allData' if all_time else 'weekData') or []
+
+def get_listening_profile(params):
+    """Summarise listening taste from the play-history rankings."""
+    uid = get_uid()
+    if not uid:
+        return {"error": "Cannot determine user ID (MUSIC_U missing or expired?)"}
+    top_n = max(1, min(int(params.get('top', 10)), 30))
+    profile = {}
+    for label, all_time in (('this_week', False), ('all_time', True)):
+        result = netease_weapi('/v1/play/record', {'uid': uid, 'type': 0 if all_time else 1})
+        if result.get('code') != 200:
+            profile[label] = {"error": "Failed to get play history", "detail": _with_hint(result)}
+            continue
+        profile[label] = summarise_play_records(_play_records(result, all_time), top_n)
+    return profile
+
+def summarise_play_records(records, top_n=10):
+    """Aggregate play-history records into top artists, albums and songs."""
+    artists, albums = Counter(), Counter()
+    songs = []
+    total = 0
+    for r in records:
+        song = r.get('song') or {}
+        plays = int(r.get('playCount') or 0)
+        total += plays
+        for a in song.get('ar') or []:
+            if a.get('name'):
+                artists[a['name']] += plays
+        album = (song.get('al') or {}).get('name')
+        if album:
+            albums[album] += plays
+        names = ', '.join(a.get('name', '?') for a in song.get('ar') or [])
+        songs.append((plays, f"{song.get('name', '?')} - {names}"))
+    songs.sort(key=lambda item: -item[0])
+    return {
+        "songs_counted": len(records), "total_plays": total,
+        "top_artists": [f"{name} ({n} plays)" for name, n in artists.most_common(top_n)],
+        "top_albums": [f"{name} ({n} plays)" for name, n in albums.most_common(top_n)],
+        "top_songs": [f"{title} ({n} plays)" for n, title in songs[:top_n]],
+    }
 
 def get_recent_plays(params):
     """Get actual recent play events with timestamps."""
@@ -449,7 +577,7 @@ def list_my_playlists(params):
     uid = uid_result.get('account', {}).get('id')
     if not uid:
         return {"error": "Cannot determine user ID"}
-    result = netease_request(f'/api/user/playlist?uid={uid}&limit=50&offset=0', method='GET')
+    result = netease_request(f'/api/user/playlist?uid={uid}&limit=1000&offset=0', method='GET')
     if not result or result.get('code') != 200:
         return {"error": "Failed to get playlists"}
     playlists = result.get('playlist', [])
@@ -460,21 +588,45 @@ def list_my_playlists(params):
         output.append(f"ID:{p['id']} | {p['name']} | {p.get('trackCount', 0)} songs ({owner}){desc}")
     return {"playlists": output}
 
+def _playlist_track_ids(playlist):
+    """Full ordered track ids. `tracks` can be truncated on big playlists; `trackIds` is not."""
+    ids = [t.get('id') for t in playlist.get('trackIds') or [] if t.get('id')]
+    return ids or [t.get('id') for t in playlist.get('tracks') or [] if t.get('id')]
+
+def _song_details(ids):
+    """Song detail dicts for ids (order kept), fetched in batches."""
+    by_id = {}
+    for start in range(0, len(ids), 500):
+        chunk = ids[start:start + 500]
+        result = netease_request('/api/v3/song/detail', data={'c': json.dumps([{"id": int(i)} for i in chunk])})
+        if result.get('code') != 200:
+            break
+        for s in result.get('songs') or []:
+            by_id[s.get('id')] = s
+    return [by_id[i] for i in ids if i in by_id]
+
 def get_playlist_songs(params):
-    """Get all songs in a playlist."""
+    """Get the songs in a playlist (up to `limit`, default 1000)."""
     pid = params.get('playlist_id')
     if not pid:
         return {"error": "playlist_id required"}
+    limit = max(1, min(int(params.get('limit', 1000)), 5000))
     result = netease_request(f'/api/v6/playlist/detail?id={pid}', method='GET')
     if not result or result.get('code') != 200:
         return {"error": "Failed to get playlist", "detail": result}
     playlist = result.get('playlist', {})
-    tracks = playlist.get('tracks', [])
+    ids = _playlist_track_ids(playlist)
+    tracks = playlist.get('tracks') or []
+    if len(tracks) < min(len(ids), limit):
+        tracks = _song_details(ids[:limit]) or tracks
     output = []
-    for i, t in enumerate(tracks, 1):
+    for i, t in enumerate(tracks[:limit], 1):
         artists = ', '.join(a['name'] for a in t.get('ar', []))
         output.append(f"{i}. {t['name']} - {artists} (ID:{t['id']})")
-    return {"name": playlist.get('name'), "songs": output}
+    out = {"name": playlist.get('name'), "total": len(ids), "songs": output}
+    if len(ids) > len(output):
+        out["note"] = f"Showing {len(output)} of {len(ids)} songs"
+    return out
 
 def create_playlist(params):
     """Create a new playlist."""
@@ -550,18 +702,38 @@ def update_playlist_description(params):
         return {"error": "Failed to update description", "detail": result}
     return {"status": f"Updated description for playlist {pid}"}
 
+def check_reorder(current_ids, new_ids):
+    """A reorder must contain exactly the playlist's songs, once each; otherwise refuse,
+    because NetEase writes whatever list it gets and would drop or add songs."""
+    if len(set(new_ids)) != len(new_ids):
+        dupes = sorted({i for i in new_ids if new_ids.count(i) > 1})
+        return {"error": "song_ids contains duplicates", "duplicates": dupes}
+    missing = [i for i in current_ids if i not in set(new_ids)]
+    extra = [i for i in new_ids if i not in set(current_ids)]
+    if missing or extra:
+        return {"error": "song_ids must list every song in the playlist exactly once",
+                "missing": missing[:50], "not_in_playlist": extra[:50],
+                "expected_count": len(current_ids), "given_count": len(new_ids)}
+    return None
+
 def reorder_playlist_tracks(params):
     """Reorder all tracks in a playlist."""
     pid = params.get('playlist_id')
     song_ids = params.get('song_ids', '')
     if not pid or not song_ids:
         return {"error": "playlist_id and song_ids required"}
-    ids = [int(s.strip()) for s in str(song_ids).split(',') if s.strip()]
+    try:
+        ids = [int(s.strip()) for s in str(song_ids).split(',') if s.strip()]
+    except ValueError:
+        return {"error": "song_ids must be comma-separated numbers"}
     # Get current order
     detail = netease_request(f'/api/v6/playlist/detail?id={pid}', method='GET')
     if not detail or detail.get('code') != 200:
         return {"error": "Failed to get playlist detail"}
-    current_ids = [t['id'] for t in detail.get('playlist', {}).get('tracks', [])]
+    current_ids = _playlist_track_ids(detail.get('playlist', {}))
+    problem = check_reorder(current_ids, ids)
+    if problem:
+        return problem
     if current_ids == ids:
         return {"status": "Playlist is already in the requested order."}
     result = write_call('/playlist/manipulate/tracks',
@@ -655,6 +827,107 @@ def get_liked_songs(params):
     ids = result.get('ids', [])
     return {"count": len(ids), "song_ids": ids[:200], "note": f"Showing first 200 of {len(ids)} liked songs" if len(ids) > 200 else None}
 
+def account_status(params):
+    """Is the cookie still logged in, and as whom."""
+    jar = _parse_cookie(current_cookie())
+    out = {"has_MUSIC_U": 'MUSIC_U' in jar, "has_csrf": bool(get_csrf())}
+    result = netease_weapi('/nuser/account/get', {})
+    if result.get('code') != 200:
+        return dict(out, logged_in=False, error="Account check failed", detail=_with_hint(result))
+    account, profile = result.get('account') or {}, result.get('profile') or {}
+    if not account.get('id') or not profile:
+        return dict(out, logged_in=False,
+                    hint="Not logged in or session expired: refresh MUSIC_U / __csrf in NETEASE_COOKIE")
+    return dict(out, logged_in=True, uid=account.get('id'), nickname=profile.get('nickname'),
+                vip_type=account.get('vipType'))
+
+def _fmt_comment(c):
+    user = (c.get('user') or {}).get('nickname', '?')
+    return {"user": user, "content": c.get('content', ''), "likes": c.get('likedCount', 0),
+            "time": _fmt_time(c.get('time'))}
+
+def get_song_comments(params):
+    """Hot (or latest) comments of a song."""
+    song_id = params.get('song_id')
+    if not song_id:
+        return {"error": "song_id required"}
+    limit = max(1, min(int(params.get('limit', 10)), 50))
+    hot = str(params.get('hot', 'true')).lower() != 'false'
+    kind = 'hotcomments' if hot else 'comments'
+    result = netease_request(f'/api/v1/resource/{kind}/R_SO_4_{int(song_id)}?limit={limit}&offset=0', method='GET')
+    if result.get('code') != 200:
+        return {"error": "Failed to get comments", "detail": _with_hint(result)}
+    comments = result.get('hotComments') if hot else result.get('comments')
+    return {"song_id": song_id, "total": result.get('total'),
+            "comments": [_fmt_comment(c) for c in (comments or [])[:limit]]}
+
+def get_similar_songs(params):
+    """Songs NetEase considers similar to the given one."""
+    song_id = params.get('song_id')
+    if not song_id:
+        return {"error": "song_id required"}
+    result = netease_request(f'/api/v1/discovery/simiSong?songid={int(song_id)}&limit=10&offset=0', method='GET')
+    if result.get('code') != 200:
+        return {"error": "Failed to get similar songs", "detail": _with_hint(result)}
+    output = []
+    for i, s in enumerate(result.get('songs') or [], 1):
+        artists = ', '.join(a.get('name', '?') for a in s.get('artists') or s.get('ar') or [])
+        output.append(f"{i}. {s.get('name', '?')} - {artists} (ID:{s.get('id')})")
+    return {"similar": output}
+
+def _private_text(raw):
+    """A private message's `msg` is JSON; pull out readable text and any song/invite."""
+    try:
+        body = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except ValueError:
+        return raw
+    if not isinstance(body, dict):
+        return str(body)
+    text = body.get('msg') or ''
+    song = body.get('song') or {}
+    if song.get('name'):
+        text = (text + ' ' if text else '') + f"[song: {song['name']} (ID:{song.get('id')})]"
+    if not text and 'listenTogether' in json.dumps(body, ensure_ascii=False):
+        text = '[Listen Together invitation]'
+    return text or body.get('title') or '[non-text message]'
+
+def get_private_messages(params):
+    """Recent private-message conversations, or the history with one user."""
+    user_id = params.get('user_id')
+    limit = max(1, min(int(params.get('limit', 20)), 100))
+    if not user_id:
+        result = netease_weapi('/msg/private/users', {'offset': 0, 'limit': limit, 'total': 'true'})
+        if result.get('code') != 200:
+            return {"error": "Failed to get conversations", "detail": _with_hint(result)}
+        out = []
+        for m in result.get('msgs') or []:
+            peer = m.get('fromUser') or {}
+            out.append({"user_id": peer.get('userId'), "nickname": peer.get('nickname'),
+                        "last": _private_text(m.get('lastMsg')), "time": _fmt_time(m.get('lastMsgTime')),
+                        "unread": m.get('newMsgCount', 0)})
+        return {"conversations": out}
+    result = netease_weapi('/msg/private/history', {'userId': str(user_id), 'limit': limit, 'time': 0, 'total': 'true'})
+    if result.get('code') != 200:
+        return {"error": "Failed to get messages", "detail": _with_hint(result)}
+    out = []
+    for m in sorted(result.get('msgs') or [], key=lambda m: m.get('time') or 0):
+        sender = (m.get('fromUser') or {})
+        out.append({"from": sender.get('nickname') or sender.get('userId'), "text": _private_text(m.get('msg')),
+                    "time": _fmt_time(m.get('time'))})
+    return {"user_id": user_id, "messages": out}
+
+def send_private_message(params):
+    """Send a text private message to one user."""
+    user_id, text = params.get('user_id'), str(params.get('text', '')).strip()
+    if not user_id or not text:
+        return {"error": "user_id and text required"}
+    if len(text) > 500:
+        return {"error": "text is longer than 500 characters"}
+    result = netease_eapi('/api/msg/private/send', {'type': 'text', 'msg': text, 'userIds': f'[{int(user_id)}]'})
+    if result.get('code') != 200:
+        return {"error": "Failed to send message", "detail": _with_hint(result)}
+    return {"status": f"Sent to {user_id}"}
+
 
 
 # --- Tool Registry ---
@@ -671,8 +944,8 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}},
     {"name": "list_my_playlists", "description": "List all playlists of the logged-in user.",
      "inputSchema": {"type": "object", "properties": {}}},
-    {"name": "get_playlist_songs", "description": "Get all songs in a playlist.",
-     "inputSchema": {"type": "object", "properties": {"playlist_id": {"type": "integer", "description": "Playlist ID"}}, "required": ["playlist_id"]}},
+    {"name": "get_playlist_songs", "description": "Get the songs in a playlist, in order (big playlists included).",
+     "inputSchema": {"type": "object", "properties": {"playlist_id": {"type": "integer", "description": "Playlist ID"}, "limit": {"type": "integer", "description": "Max songs (default 1000, max 5000)"}}, "required": ["playlist_id"]}},
     {"name": "create_playlist", "description": "Create a new playlist.",
      "inputSchema": {"type": "object", "properties": {"name": {"type": "string", "description": "Playlist name"}, "description": {"type": "string", "description": "Playlist description"}, "privacy": {"type": "integer", "description": "0=public, 10=private"}}, "required": ["name"]}},
     {"name": "add_to_playlist", "description": "Add songs to a playlist.",
@@ -695,6 +968,18 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {}}},
     {"name": "get_liked_songs", "description": "Get all liked (red-heart) song IDs for the current user.",
      "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "account_status", "description": "Check whether the NetEase cookie is still logged in, and as which account.",
+     "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "get_listening_profile", "description": "Summarise listening taste: top artists, albums and songs this week and of all time.",
+     "inputSchema": {"type": "object", "properties": {"top": {"type": "integer", "description": "How many of each to list (1-30, default 10)"}}}},
+    {"name": "get_song_comments", "description": "Read a song's hot comments (or the latest ones).",
+     "inputSchema": {"type": "object", "properties": {"song_id": {"type": "integer", "description": "Song ID"}, "hot": {"type": "boolean", "description": "true=hot comments (default), false=latest"}, "limit": {"type": "integer", "description": "Number of comments (1-50, default 10)"}}, "required": ["song_id"]}},
+    {"name": "get_similar_songs", "description": "Find songs similar to a given song.",
+     "inputSchema": {"type": "object", "properties": {"song_id": {"type": "integer", "description": "Song ID"}}, "required": ["song_id"]}},
+    {"name": "get_private_messages", "description": "List recent private-message conversations, or read the messages with one user.",
+     "inputSchema": {"type": "object", "properties": {"user_id": {"type": "integer", "description": "Other user's ID; omit to list conversations"}, "limit": {"type": "integer", "description": "Max items (1-100, default 20)"}}}},
+    {"name": "send_private_message", "description": "Send a text private message to a NetEase user. Only send when the account owner asked for it.",
+     "inputSchema": {"type": "object", "properties": {"user_id": {"type": "integer", "description": "Recipient user ID"}, "text": {"type": "string", "description": "Message text (max 500 characters)"}}, "required": ["user_id", "text"]}},
 ]
 
 TOOL_DISPATCH = {
@@ -716,117 +1001,303 @@ TOOL_DISPATCH = {
     "get_artist_hot_songs": get_artist_hot_songs,
     "get_personal_fm": get_personal_fm,
     "get_liked_songs": get_liked_songs,
+    "account_status": account_status,
+    "get_listening_profile": get_listening_profile,
+    "get_song_comments": get_song_comments,
+    "get_similar_songs": get_similar_songs,
+    "get_private_messages": get_private_messages,
+    "send_private_message": send_private_message,
 }
 
-# --- MCP Protocol Handler ---
+# --- MCP protocol ---
+# Streamable HTTP (POST /mcp) is the main transport. The older HTTP+SSE pair
+# (GET /sse + POST /message) is kept for clients that still use it.
+SUPPORTED_PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
+LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
+MAX_BODY_BYTES = 1 << 20
+
+_sessions = {}          # Mcp-Session-Id -> {"version": str, "created": float}
+_sse_sessions = {}      # legacy sessionId -> queue.Queue of outgoing messages
+_sessions_lock = threading.Lock()
+
+def _rpc_error(req_id, code, message):
+    return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
+
+def negotiate_version(requested):
+    return requested if requested in SUPPORTED_PROTOCOL_VERSIONS else LATEST_PROTOCOL_VERSION
+
+def call_tool(name, arguments):
+    """Run one tool and wrap its dict result as MCP tool content."""
+    handler = TOOL_DISPATCH[name]
+    logger.info(f"Tool call: {name}")
+    try:
+        tool_result = handler(arguments)
+    except Exception as e:
+        logger.error(f"Tool error [{name}]: {type(e).__name__}: {e}")
+        return {"content": [{"type": "text", "text": json.dumps({"error": str(e)}, ensure_ascii=False)}], "isError": True}
+    result = {"content": [{"type": "text", "text": json.dumps(tool_result, ensure_ascii=False)}]}
+    if isinstance(tool_result, dict) and "error" in tool_result:
+        result["isError"] = True
+    return result
+
+def handle_rpc(message):
+    """Handle one JSON-RPC message. Returns the response dict, or None for notifications/responses."""
+    if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
+        return _rpc_error(None, -32600, "Invalid Request")
+    if "method" not in message:
+        return None  # a response to something we never asked; nothing to answer
+    method, req_id = message.get("method"), message.get("id")
+    if "id" not in message:
+        return None  # notification (notifications/initialized, notifications/cancelled, ...)
+    params = message.get("params") or {}
+    if not isinstance(params, dict):
+        return _rpc_error(req_id, -32602, "params must be an object")
+    if method == "initialize":
+        result = {"protocolVersion": negotiate_version(params.get("protocolVersion")),
+                  "capabilities": {"tools": {"listChanged": False}},
+                  "serverInfo": {"name": "netease-music-mcp", "version": VERSION}}
+    elif method == "ping":
+        result = {}
+    elif method == "tools/list":
+        result = {"tools": TOOLS}
+    elif method == "tools/call":
+        name, arguments = params.get("name", ""), params.get("arguments") or {}
+        if not isinstance(arguments, dict):
+            return _rpc_error(req_id, -32602, "arguments must be an object")
+        if name not in TOOL_DISPATCH:
+            return _rpc_error(req_id, -32602, f"Unknown tool: {name}")
+        result = call_tool(name, arguments)
+    else:
+        return _rpc_error(req_id, -32601, f"Method not found: {method}")
+    return {"jsonrpc": "2.0", "id": req_id, "result": result}
+
+def handle_payload(payload):
+    """A single message or a batch. Returns (response or None, negotiated version if it held an initialize)."""
+    if isinstance(payload, list) and not payload:
+        return _rpc_error(None, -32600, "Empty batch"), None
+    messages = payload if isinstance(payload, list) else [payload]
+    init_version = None
+    for m in messages:
+        if isinstance(m, dict) and m.get("method") == "initialize" and "id" in m:
+            init_version = negotiate_version((m.get("params") or {}).get("protocolVersion"))
+    responses = [r for r in (handle_rpc(m) for m in messages) if r is not None]
+    if not responses:
+        return None, init_version
+    return (responses if isinstance(payload, list) else responses[0]), init_version
+
+def origin_allowed(origin):
+    """No Origin header = not a browser (allowed). Browsers: localhost or MCP_ALLOWED_ORIGINS only,
+    so a random web page cannot drive the logged-in account (DNS rebinding / CSRF)."""
+    if not origin:
+        return True
+    origin = origin.rstrip('/')
+    if origin in ALLOWED_ORIGINS or '*' in ALLOWED_ORIGINS:
+        return True
+    host = urllib.parse.urlparse(origin).hostname or ''
+    return host in ('localhost', '127.0.0.1', '::1')
+
+def token_ok(header):
+    if not AUTH_TOKEN:
+        return True
+    scheme, _, value = (header or '').partition(' ')
+    return scheme.lower() == 'bearer' and hmac.compare_digest(value.strip().encode(), AUTH_TOKEN.encode())
+
 class MCPHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
+    # -- plumbing --
     def _cors(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', '*')
-    def _json_response(self, data, status=200):
-        body = json.dumps(data).encode()
+        origin = self.headers.get('Origin')
+        if origin and origin_allowed(origin):
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers',
+                             'Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID')
+            self.send_header('Access-Control-Expose-Headers', 'Mcp-Session-Id')
+
+    def _send(self, status, data=None, headers=None):
+        body = b'' if data is None else json.dumps(data, ensure_ascii=False).encode()
+        if status >= 400:
+            # The request body may be unread; do not let it leak into a next keep-alive request.
+            self.close_connection = True
         self.send_response(status)
         self._cors()
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', len(body))
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
+        if data is not None:
+            self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        if self.close_connection:
+            self.send_header('Connection', 'close')
         self.end_headers()
-        self.wfile.write(body)
+        if body:
+            self.wfile.write(body)
+
+    def _path(self):
+        return urllib.parse.urlparse(self.path).path.rstrip('/') or '/'
+
+    def _guard(self):
+        """Origin + auth checks shared by every MCP route. Returns True if the request may go on."""
+        if not origin_allowed(self.headers.get('Origin')):
+            self._send(403, {"error": "Origin not allowed"})
+            return False
+        if not token_ok(self.headers.get('Authorization')):
+            self._send(401, {"error": "Unauthorized"}, {'WWW-Authenticate': 'Bearer'})
+            return False
+        return True
+
+    def _read_json(self):
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except ValueError:
+            length = -1
+        if length < 0 or length > MAX_BODY_BYTES:
+            self._send(413, _rpc_error(None, -32600, "Body too large"))
+            return None, False
+        try:
+            return json.loads(self.rfile.read(length) or b'null'), True
+        except ValueError:
+            self._send(400, _rpc_error(None, -32700, "Parse error"))
+            return None, False
+
+    # -- routes --
     def do_OPTIONS(self):
-        self.send_response(204)
-        self._cors()
-        self.end_headers()
+        self._send(204 if origin_allowed(self.headers.get('Origin')) else 403)
+
     def do_GET(self):
-        if self.path == '/health':
-            self._json_response({"status": "ok", "tools": len(TOOLS), "version": VERSION})
-        elif self.path == '/sse':
-            self._handle_sse()
-        else:
-            self._json_response({"error": "Not found"}, 404)
+        path = self._path()
+        if path == '/health':
+            return self._send(200, {"status": "ok", "tools": len(TOOLS), "version": VERSION})
+        if not self._guard():
+            return
+        if path == '/mcp':
+            # This server never pushes unrequested messages, so it offers no GET stream.
+            return self._send(405, {"error": "Method not allowed"}, {'Allow': 'POST, DELETE'})
+        if path == '/sse':
+            return self._handle_sse()
+        self._send(404, {"error": "Not found"})
+
+    def do_DELETE(self):
+        if not self._guard():
+            return
+        if self._path() != '/mcp':
+            return self._send(404, {"error": "Not found"})
+        sid = self.headers.get('Mcp-Session-Id')
+        with _sessions_lock:
+            known = _sessions.pop(sid, None) if sid else None
+        self._send(204 if known else 404)
+
     def do_POST(self):
-        length = int(self.headers.get('Content-Length', 0))
-        body = json.loads(self.rfile.read(length)) if length else {}
-        method = body.get('method', '')
-        req_id = body.get('id')
-        # Notifications and requests without id get 204 (no response body)
-        if method.startswith('notifications/') or req_id is None:
-            self.send_response(204)
-            self._cors()
-            self.end_headers()
+        path = self._path()
+        if path not in ('/mcp', '/message'):
+            return self._send(404, {"error": "Not found"})
+        if not self._guard():
             return
-        if method == 'initialize':
-            result = {"protocolVersion": "2025-03-26", "capabilities": {"tools": {"listChanged": False}},
-                      "serverInfo": {"name": "netease-music-mcp", "version": VERSION}}
-        elif method == 'tools/list':
-            result = {"tools": TOOLS}
-        elif method == 'tools/call':
-            tool_name = body.get('params', {}).get('name', '')
-            arguments = body.get('params', {}).get('arguments', {})
-            logger.info(f"Tool call: {tool_name}")
-            handler = TOOL_DISPATCH.get(tool_name)
-            if handler:
-                try:
-                    tool_result = handler(arguments)
-                    result = {"content": [{"type": "text", "text": json.dumps(tool_result, ensure_ascii=False)}]}
-                    if isinstance(tool_result, dict) and "error" in tool_result:
-                        result["isError"] = True
-                except Exception as e:
-                    logger.error(f"Tool error [{tool_name}]: {e}")
-                    result = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}], "isError": True}
-            else:
-                result = {"content": [{"type": "text", "text": f"Unknown tool: {tool_name}"}], "isError": True}
-        else:
-            self._json_response({"jsonrpc": "2.0", "id": req_id,
-                                 "error": {"code": -32601, "message": f"Unknown method: {method}"}})
+        if path == '/message':
+            return self._handle_legacy_post()
+        version = self.headers.get('MCP-Protocol-Version')
+        if version and version not in SUPPORTED_PROTOCOL_VERSIONS:
+            return self._send(400, _rpc_error(None, -32600, f"Unsupported MCP-Protocol-Version: {version}"))
+        sid = self.headers.get('Mcp-Session-Id')
+        if sid:
+            with _sessions_lock:
+                known = sid in _sessions
+            if not known:
+                return self._send(404, _rpc_error(None, -32001, "Session not found"))
+        payload, ok = self._read_json()
+        if not ok:
             return
-        response = {"jsonrpc": "2.0", "id": req_id, "result": result}
-        self._json_response(response)
+        response, init_version = handle_payload(payload)
+        headers = {}
+        if init_version:
+            sid = str(uuid.uuid4())
+            with _sessions_lock:
+                _sessions[sid] = {"version": init_version, "created": time.time()}
+                if len(_sessions) > 1000:  # forget the oldest; that client just re-initializes
+                    _sessions.pop(next(iter(_sessions)))
+            headers['Mcp-Session-Id'] = sid
+        if response is None:
+            return self._send(202, None, headers)
+        self._send(200, response, headers)
+
+    # -- legacy HTTP+SSE (protocol 2024-11-05) --
     def _handle_sse(self):
+        sid = uuid.uuid4().hex
+        outbox = queue.Queue()
+        with _sessions_lock:
+            _sse_sessions[sid] = outbox
         self.send_response(200)
         self._cors()
         self.send_header('Content-Type', 'text/event-stream')
         self.send_header('Cache-Control', 'no-cache')
-        self.send_header('Connection', 'keep-alive')
         self.end_headers()
-        endpoint = f"http://localhost:{PORT}/message?sessionId={SESSION_ID}"
-        self.wfile.write(f"event: endpoint\ndata: {endpoint}\n\n".encode())
-        self.wfile.flush()
+        self.close_connection = True
         try:
+            # A relative URI: the client resolves it against the /sse URL it used.
+            self.wfile.write(f"event: endpoint\ndata: /message?sessionId={sid}\n\n".encode())
+            self.wfile.flush()
             while True:
-                time.sleep(30)
-                self.wfile.write(b": keepalive\n\n")
+                try:
+                    msg = outbox.get(timeout=25)
+                    self.wfile.write(f"event: message\ndata: {json.dumps(msg, ensure_ascii=False)}\n\n".encode())
+                except queue.Empty:
+                    self.wfile.write(b": keepalive\n\n")
                 self.wfile.flush()
-        except:
+        except OSError:
             pass
+        finally:
+            with _sessions_lock:
+                _sse_sessions.pop(sid, None)
+
+    def _handle_legacy_post(self):
+        sid = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('sessionId', [''])[0]
+        with _sessions_lock:
+            outbox = _sse_sessions.get(sid)
+        if outbox is None:
+            return self._send(404, {"error": "Unknown sessionId"})
+        payload, ok = self._read_json()
+        if not ok:
+            return
+        response, _ = handle_payload(payload)
+        if response is not None:
+            outbox.put(response)
+        self._send(202)
+
     def log_message(self, format, *args):
         pass
 
-class ThreadedHTTPServer(HTTPServer):
-    def process_request(self, request, client_address):
-        t = threading.Thread(target=self._handle, args=(request, client_address))
-        t.daemon = True
-        t.start()
-    def _handle(self, request, client_address):
-        try:
-            self.finish_request(request, client_address)
-        except:
-            pass
-        finally:
-            self.shutdown_request(request)
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
+    daemon_threads = True
 
 def _startup_checks():
     """Log which credentials were found (key names only, never values)."""
-    jar = _parse_cookie(NETEASE_COOKIE)
+    jar = _parse_cookie(current_cookie())
     logger.info("Cookie keys provided: " + (", ".join(sorted(jar)) or "(none)"))
     if 'MUSIC_U' not in jar:
         logger.warning("No MUSIC_U in NETEASE_COOKIE: requests are anonymous and account calls will fail")
     if not get_csrf():
         logger.warning("No __csrf (in NETEASE_COOKIE or NETEASE_CSRF): write operations will fail with 403")
+    if not AUTH_TOKEN and HOST not in ('127.0.0.1', 'localhost', '::1'):
+        logger.warning("MCP_AUTH_TOKEN is not set and the server listens on %s: anyone who can reach "
+                       "this port can use your NetEase account. Set MCP_AUTH_TOKEN or MCP_HOST=127.0.0.1.", HOST)
+
+def load_extensions():
+    """Optional extensions, each switched on by its own env flag. A failing extension is
+    logged and skipped; the core tools keep working."""
+    if os.environ.get("TOGETHER_ENABLED", "").lower() in ("1", "true", "yes", "on"):
+        try:
+            import together
+            together.setup(sys.modules[__name__])
+            logger.info("Listen Together extension loaded")
+        except Exception as e:
+            logger.error("Listen Together extension not loaded: %s: %s", type(e).__name__, e)
 
 if __name__ == '__main__':
-    logger.info(f"Starting NetEase Music MCP Server v{VERSION} with {len(TOOLS)} tools on port {PORT}")
+    load_extensions()
+    logger.info(f"Starting NetEase Music MCP Server v{VERSION} with {len(TOOLS)} tools on {HOST}:{PORT} (POST /mcp)")
     _startup_checks()
-    server = ThreadedHTTPServer(('0.0.0.0', PORT), MCPHandler)
+    server = ThreadedHTTPServer((HOST, PORT), MCPHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.0] - 2026-11-22
+
+### Fixed
+- Transport now follows the MCP Streamable HTTP spec: only `POST /mcp` is the endpoint (any path used to be accepted), `initialize` issues an `Mcp-Session-Id`, the protocol version is negotiated, notifications get `202`, JSON-RPC batches work, `GET /mcp` answers `405`, `DELETE /mcp` ends a session, unknown tools are a `-32602` error. The legacy `GET /sse` + `POST /message` pair now actually delivers responses over the stream.
+- Security: CORS no longer allows every origin. Browser requests are accepted only from localhost or `MCP_ALLOWED_ORIGINS`, so a web page cannot drive the logged-in account.
+- `get_play_history` showed NetEase's ranking score as the play count; it now shows `playCount`.
+- `reorder_playlist_tracks` wrote whatever list it got. It now refuses a list with missing, extra or duplicate songs.
+- `get_playlist_songs` returned only the first part of big playlists; it now reads the full `trackIds`.
+- Error responses close the connection so an unread request body cannot corrupt the next keep-alive request.
+
+### Added
+- Optional `MCP_AUTH_TOKEN` (Bearer), `MCP_HOST`, `MCP_ALLOWED_ORIGINS`.
+- Tools: `account_status`, `get_listening_profile`, `get_song_comments`, `get_similar_songs`, `get_private_messages`, `send_private_message`.
+- Pure-Python eapi encryption (AES-128-ECB), checked byte-for-byte against Node's crypto.
+- Optional Listen Together extension (`TOGETHER_ENABLED=true`, see `server/mcp-server/together/README.md`): accepts invitations, follows playback and lyrics, room chat through a small Node process around the official NetEase IM SDK, playback control with confirmation, and a bridge to a Kael-companion relay. With `TOGETHER_COOKIE` it runs as a separate AI account while the normal tools stay on `NETEASE_COOKIE`.
+- Test suite (`python -m unittest discover -s tests -t tests`), no real account needed.
+
+### Acknowledgment
+- The Listen Together extension's approach (joining flow, room message formats, fetching the chat-room ticket in a throwaway child process) follows [yanceydaisy/ncm-resonance](https://github.com/yanceydaisy/ncm-resonance) (MIT). The code here is a separate Python implementation.
+- Thanks to [@Hoshi4qwq](https://github.com/Hoshi4qwq) for the issues reported in PR #2 (transport not following Streamable HTTP, CORS open to every origin, `get_play_history` play count, `reorder_playlist_tracks` validation). They are fixed here; the PR itself was not merged.
+
+
 ## [3.2.1] - 2026-10-12
 
 ### Fixed

@@ -1,0 +1,10 @@
+{
+  "name": "ncm-together-nim",
+  "private": true,
+  "description": "Room-chat transport for the Listen Together extension (wraps the official node-nim SDK).",
+  "type": "module",
+  "engines": { "node": ">=22.16 <23" },
+  "dependencies": {
+    "node-nim": "10.10.13"
+  }
+}

@@ -5,3 +5,9 @@ music.db
 __pycache__/
 *.log
 nohup.out
+
+# Listen Together extension
+server/mcp-server/together/nim/node_modules/
+server/mcp-server/together/nim/package-lock.json
+data/
+__pycache__/

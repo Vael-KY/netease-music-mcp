@@ -1,4 +1,4 @@
-# 🎶 netease-music-mcp v3.1
+# 🎶 netease-music-mcp v3.3
 
 让你的 AI 住进你的网易云。
 
@@ -10,7 +10,7 @@
 
 ---
 
-## 功能（18 tools）
+## 功能（24 tools + 可选的一起听扩展）
 
 - 🔍 **搜歌** — 说一句话，找到歌
 - 📋 **看歌单** — 列出你所有歌单（自建的和收藏的）
@@ -30,6 +30,12 @@
 - 📖 **歌词** — 读歌词原文 + 翻译
 - 🎵 **歌曲详情** — 专辑、时长、发行年份（批量 50 首）
 - 🎧 **播放** — 搜歌并生成播放卡片
+- 🪪 **账号状态** — Cookie 还活着吗、登录的是谁
+- 🧭 **听歌画像** — 本周 / 历史最常听的歌手、专辑、歌曲
+- 💬 **歌曲评论** — 热评或最新评论
+- 🔗 **相似歌曲** — 从一首歌往外找
+- ✉️ **私信** — 看会话列表和聊天记录、发一条私信
+- 🎧 **一起听（扩展）** — 接受她的一起听邀请，跟着切歌、读当下的歌词，在房间聊天室里聊天，切歌 / 暂停 / 插歌。见 [一起听扩展](server/mcp-server/together/README.md)
 
 
 
@@ -54,6 +60,15 @@
 
 
 ---
+
+## v3.3 更新
+
+- 传输层按 MCP 规范重写：`POST /mcp` 才是端点（以前任意路径都收），`initialize` 下发 `Mcp-Session-Id`，协议版本按客户端请求协商，通知返回 202，支持批量请求，`GET /mcp` 返回 405，`DELETE /mcp` 结束会话；旧的 `GET /sse` + `POST /message` 修好后保留
+- 安全：不再对所有网页开放 CORS，浏览器来的请求只放行 localhost 和 `MCP_ALLOWED_ORIGINS`；可选 `MCP_AUTH_TOKEN`（Bearer）
+- 修复：听歌排行的播放次数一直显示成网易云的权重分（现在是真实的 `playCount`）；`reorder_playlist_tracks` 传入的歌不全或有重复时会直接拒绝，不再把歌单写乱；大歌单只能读到前一部分
+- 新工具 6 个：账号状态、听歌画像、歌曲评论、相似歌曲、私信读 / 发
+- 新增可选的「一起听」扩展（默认关闭，不影响普通工具）
+- 新增测试：`python -m unittest discover -s tests -t tests`，不需要真账号
 
 ## v3.1 更新
 
@@ -101,8 +116,11 @@ server.py（Python，端口 3456）
 网易云音乐 API
 
 
-一个文件。纯标准库。不需要 Node.js。不需要数据库。
+核心一个文件。纯标准库。不需要 Node.js。不需要数据库。
 
+一起听扩展（可选）：
+together/（Python）── 接邀请、跟播放、房间心跳、事件、可转发到 companion relay
+together/nim/（一个很小的 Node 进程）── 只负责连网易云信聊天室
 ```
 
 ## 部署
@@ -154,6 +172,16 @@ NETEASE_CSRF=你的csrf值
 
 其他可选项：`NETEASE_TZ_OFFSET`（工具输出里时间戳的时区，北京时间填 `8`，默认 UTC）、`NETEASE_UID`（一般不用填，会自动获取）。
 
+放在公网上的话强烈建议设一个访问令牌，客户端请求时带 `Authorization: Bearer 令牌`：
+
+```
+MCP_AUTH_TOKEN=一串长随机字符
+# 只在本机用的话也可以只监听本机
+# MCP_HOST=127.0.0.1
+# 要从浏览器里的网页直接调用时，列出允许的来源（逗号分隔）
+# MCP_ALLOWED_ORIGINS=https://你的网页
+```
+
 ### 4. 启动
 
 ```bash
@@ -162,7 +190,7 @@ python3 server/mcp-server/server.py
 
 服务会自己读取项目根目录的 `.env`。不要再用 `export $(cat .env | xargs)`：Cookie 里有空格和分号，会被拆开，`__csrf` 就丢了。已经在 shell 里 export 过的同名变量优先于 `.env`。
 
-看到 `Starting NetEase Music MCP Server v3.2.1 with 18 tools`，并且日志里 `Cookie keys provided` 一行包含 `MUSIC_U` 和 `__csrf`，就好了。
+看到 `Starting NetEase Music MCP Server v3.3.0 with 24 tools`，并且日志里 `Cookie keys provided` 一行包含 `MUSIC_U` 和 `__csrf`，就好了。
 
 ### 5. 连接你的 MCP 客户端
 
@@ -172,7 +200,7 @@ python3 server/mcp-server/server.py
 http://你的服务器IP:3456/mcp
 ```
 
-应该显示 18 个工具已连接。
+应该显示 24 个工具已连接（开了一起听扩展是 30 个）。设置了 `MCP_AUTH_TOKEN` 的话，在客户端的请求头里加 `Authorization: Bearer 令牌`。
 
 ---
 
@@ -187,7 +215,7 @@ nohup python3 server/mcp-server/server.py > /tmp/mcp.log 2>&1 &
 curl http://localhost:3456/health
 ```
 
-看到 `{"tools": 18}` 就更新成功了。
+看到 `{"tools": 24}` 就更新成功了。
 
 ---
 
@@ -195,6 +223,7 @@ curl http://localhost:3456/health
 
 - Python 3.8+
 - 不需要 pip install（纯标准库）
+- 只有一起听扩展的聊天室需要 Node.js 22（见扩展说明）
 
 ---
 
@@ -248,6 +277,10 @@ Railway或其他也类似
 原项目：[Elle & Matt](https://github.com/Cheiineeey/netease-music-mcp) — 感谢你们的灵感和起点。
 
 v2 & v3.1：[Kael & Vael] ꕤᴗ ᴗ)♡
+
+v3.3 致谢：
+- 一起听扩展的思路参考了 [yanceydaisy/ncm-resonance](https://github.com/yanceydaisy/ncm-resonance)（MIT）：进房流程、聊天室消息格式，以及用一次性子进程拿聊天室凭证的做法。代码是本项目用 Python 另写的，两份 cookie、relay 桥接等设计是本项目自己的。
+- 感谢 [@Hoshi4qwq](https://github.com/Hoshi4qwq) 在 PR #2 里指出的问题：传输层没按 Streamable HTTP 规范实现、CORS 全放行、听歌排行读错了播放次数字段、重排歌单不校验曲目。这些都已在 v3.3 修正（PR 本身没有合并）。
 
 
 MIT License — 随便用，注明出处就好。
