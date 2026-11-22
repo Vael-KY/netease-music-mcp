@@ -136,10 +136,9 @@ ta 在房间里知道你在听什么，是因为房间的播放状态是共享�
 我们重写的原因很简单：想让 AI 真正共享我们的网易云账号 —— 不只是搜歌，而是能在app建歌单、塞歌、看记录、管理，像一个真正住在你音乐里的人，和你一起管理保存着你记忆的地方。
 
 改动：
-- 从 3 个工具扩展到 18 个
+- 扩展为30个工具
 - 歌单操作从本地数据库改为真实网易云 API
-- 传输协议从 SSE 改为 Streamable HTTP（兼容更多客户端）
-- 去掉了 Node.js 代理依赖，纯 Python 标准库运行
+- 传输协议兼容更多客户端
 
 <img width="430" alt="019f4c13-02e9-76ef-b243-6e39adf959e6" src="https://hcti.io/v1/image/01a03d87-49e7-7ae4-bf62-082b24782e15" />
 
@@ -268,8 +267,8 @@ curl http://localhost:3456/health
 ## 环境要求
 
 - Python 3.8+
-- 不需要 pip install（纯标准库）
-- 只有一起听扩展的聊天室需要 Node.js 22（见扩展说明）
+- 24工具不需 pip install（纯标准库）
+- 只有一起听6个工具扩展需 Node.js 22（见扩展说明）
 
 ---
 
@@ -324,7 +323,7 @@ Railway或其他也类似
 
 v2 / v3.1 / v3.3：[Kael & Vael] ꕤᴗ ᴗ)♡
 
-- 一起听部分思路参考了 [ncm-resonance](https://github.com/yanceydaisy/ncm-resonance)，代码与桥接扩展为额外设计
+- 一起听部分思路参考 [ncm-resonance](https://github.com/yanceydaisy/ncm-resonance)，代码与桥接扩展为本项目内容
 - 感谢 [@Hoshi4qwq](https://github.com/Hoshi4qwq) 提出的部分问题，已修正
 
 
