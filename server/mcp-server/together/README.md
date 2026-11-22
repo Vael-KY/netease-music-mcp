@@ -49,12 +49,12 @@ TOGETHER_COOKIE=AI账号的cookie      # 一起听用 AI 自己的号
 | `TOGETHER_HEARTBEAT_SECONDS` | 10 | 房间心跳间隔 |
 | `TOGETHER_RAW_LOG` | 空 | 调试用：把聊天室收到的原始消息逐行写进这个文件 |
 | `TOGETHER_NODE` | node | Node 的路径 |
-| `TOGETHER_MCP_TOOLS` | 开桥接时 `none`，否则 `all` | 给 MCP 客户端哪些 `together_*` 工具：`all` / `control`（只留状态和播放控制）/ `none` |
+| `TOGETHER_MCP_TOOLS` | all | 给 MCP 客户端哪些 `together_*` 工具：`all` / `control`（只留状态和播放控制）/ `none` |
 | `TOGETHER_DATA_DIR` | ./data/together | relay 桥接的 SQLite 存在这里 |
 
 ### relay 桥接（接到你自建的聊天前端）
 
-开了桥接，聊天就完全不经过 MCP：房间里她说的话自动进聊天记录，AI 只管正常回复，回复自动发回房间。所以默认不再给 MCP 客户端列出 `together_*` 工具（省上下文，也避免同一句话被发两遍）；想让 AI 还能切歌、暂停，设 `TOGETHER_MCP_TOOLS=control`。
+这是给自建前端的优化：开了桥接，聊天就不经过 MCP，房间里她说的话自动进聊天记录，AI 只管正常回复，回复自动发回房间，不用调工具、不费 token。`together_*` 工具照样都在（切歌、暂停、看歌词还是用它们），`together_send_chat` 的说明里会注明“正常回复会自动发回房间”，免得同一句话发两遍。想精简工具可以设 `TOGETHER_MCP_TOOLS=control` 或 `none`。
 
 不开桥接也完全能用：任何 MCP 客户端都可以用 `together_events` 看房间里发生了什么，用 `together_send_chat` 说话。
 桥接是给有自建聊天前端的人用的：房间里的消息直接进你前端的聊天记录，回复自动说回房间，不用客户端一直轮询。

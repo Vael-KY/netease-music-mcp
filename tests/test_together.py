@@ -383,10 +383,12 @@ class RealRoomShapesTest(unittest.TestCase):
 
 
 class ToolSetTest(unittest.TestCase):
-    def test_bridge_hides_tools_by_default(self):
-        from together import tool_names, DISPATCH
-        self.assertEqual(tool_names(None, bridged=True), set())
-        self.assertEqual(tool_names('', bridged=False), set(DISPATCH))
-        self.assertEqual(tool_names('control', bridged=True),
-                         {'together_status', 'together_control', 'together_queue_next', 'together_leave'})
-        self.assertEqual(tool_names('ALL', bridged=True), set(DISPATCH))
+    def test_all_tools_by_default_and_bridge_note(self):
+        from together import tool_names, tool_list, DISPATCH
+        self.assertEqual(tool_names(None), set(DISPATCH))
+        self.assertEqual(tool_names('control'), {'together_status', 'together_control', 'together_queue_next', 'together_leave'})
+        bridged = {t['name']: t['description'] for t in tool_list(tool_names(None), True)}
+        plain = {t['name']: t['description'] for t in tool_list(tool_names(None), False)}
+        self.assertEqual(len(bridged), 6)
+        self.assertIn('relay bridge is on', bridged['together_send_chat'])
+        self.assertNotIn('relay bridge', plain['together_send_chat'])
