@@ -1292,6 +1292,13 @@ def load_extensions():
             logger.info("Listen Together extension loaded")
         except Exception as e:
             logger.error("Listen Together extension not loaded: %s: %s", type(e).__name__, e)
+    if os.environ.get("SKETCH_ENABLED", "").lower() in ("1", "true", "yes", "on"):
+        try:
+            import sketch
+            if sketch.setup(sys.modules[__name__]):
+                logger.info("Song sketch extension loaded")
+        except Exception as e:
+            logger.error("Song sketch extension not loaded: %s: %s", type(e).__name__, e)
 
 if __name__ == '__main__':
     load_extensions()
